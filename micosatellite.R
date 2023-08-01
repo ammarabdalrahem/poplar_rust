@@ -7,15 +7,15 @@ output: html_notebook
 
 ------------------------------------------------------------------------
 
-# 1. Dependencies
+## 1. Dependencies
 
 Remember to re-run this code every time you re-open this R Notebook.
 
-```{r}
+```{r, eval=TRUE}
 #Code to install packages if necessary, and read them with library function
 
 required_packages <- c("ggplot2","readxl","tidyverse","genepop","hierfstat","here","mapdata",
-                       "mapplots","data.table","grDevices","colorspace","adegenet","poppr","pegas","ape","ade4","remotes","ggtree")
+                       "mapplots","data.table","grDevices","colorspace","adegenet","poppr","pegas","ape","ade4","remotes","ggtree","ggtreeExtra")
 for (package in required_packages) {
   if (package %in% row.names(installed.packages())) {
     library(package, character.only = TRUE)
@@ -27,9 +27,9 @@ for (package in required_packages) {
 
 ```
 
-------------------------------------------------------------------------
 
-# 2. Obtain data
+
+## 2. Obtain data
 
 
 ```{r}
@@ -52,7 +52,7 @@ data <- as.data.frame(data)
 
 
 # Remove rows containing "sex" in "Profil" except for those sampled at "Prelles"
-data <- data[!(data$Profil == "sex" & !grepl("Prelles", data$Site, ignore.case = TRUE)), ]
+#data <- data[!(data$Profil == "sex" & !grepl("Prelles", data$Site, ignore.case = TRUE)), ]
 
 # remove unknown Profil & population
 data <- data[!(data$Profil == "NA" | data$Pop == "NA"), ]
@@ -62,10 +62,127 @@ data <- data[!(data$Profil == "NA" | data$Pop == "NA"), ]
 head(data)
 
 ```
-------------------------------------------------------------------------
 
 
-# 3. Data map visualization
+## 3. Define MLG and MLL
+
+```{r}
+#create table of genotype
+
+# Select columns with "Mlp" in the name and the first column as isolate id
+genotype_cols <- c("Isolate", grep("Mlp", names(data), value = TRUE))
+genotype_data <- data[, genotype_cols]
+
+#make isolate id as column names 
+rownames(genotype_data) <- genotype_data[,1]
+#delete the first column
+genotype_data$Isolate = NULL
+
+
+# Convert to genind object
+data_GenInd <- df2genind(
+  X = genotype_data,   #data.frame containing allele data only 
+  sep = NULL,
+  ncode = 3,           #an optional integer giving the number of characters used for coding one genotype at one locus.
+  ind.names = rownames(genotype_data),  # individuals names
+  loc.names = colnames(genotype_data),  # markers names
+  pop = data$Pop,                       # giving the population of each individual
+  NA.char = "999",                      # string corresponding to missing allele 999 or 999999
+  ploidy = 2,
+  type = "codom",                       #codom' stands for 'codominant' (e.g. microstallites, allozymes)
+  strata = NULL,
+  hierarchy = NULL,
+  check.ploidy = getOption("adegenet.check.ploidy")
+)
+
+data_Genclone <- as.genclone(data_GenInd)
+
+#Define MLG according threshold = 0
+mlg_assignments <- mlg.filter(data_Genclone, threshold = 0, distance = "diss.dist", threads = 1L,missing = "asis") #he "asis" option is used to indicate that missing data should be treated "as is," meaning that missing values will be retained as NA in the distance matrix.
+
+#add MLG result to the table
+genotype_data$MLG <- mlg_assignments
+
+#Define the MLL 
+#Choosing a threshold
+#After you have chosen a genetic distance and a filtering algorithm
+#choose threshold to represent the minimum genetic distance at which two individuals would be considered from different clonal lineages.
+
+data_filtered <-filter_stats(data_Genclone, distance = diss.dist, plot = TRUE, missing = "asis")
+# “farthest neighbor” algorithm.
+#Arnaud-Haond et al. 2007, @bailleul2016rclone
+print(farthest_thresh <- cutoff_predictor(data_filtered$farthest$THRESHOLDS))
+
+# “UPGMA ” algorithm.
+print(average_thresh  <- cutoff_predictor(data_filtered$average$THRESHOLDS))
+
+# “nearest neighbor” algorithm.
+print(nearest_thresh  <- cutoff_predictor(data_filtered$nearest$THRESHOLDS))
+
+
+#Define the MLL threshold 0.5, algorithm	Farthest neighbor
+
+mll_assignments<- mlg.filter(data_Genclone, threshold = farthest_thresh, distance = "diss.dist", threads = 1L, missing = "asis") 
+
+
+genotype_data$MLL <- mll_assignments
+
+#write.csv2(genotype_data, "data_new.csv")
+
+```
+
+
+## Identification the individuals profile(sex/asex)
+
+```{r}
+# First identification by cluster
+grp <- find.clusters(data_GenInd, method = "kmeans", stat = "BIC", n.pca= 90 , n.clust= 2, n.iter=100000, n.start=100)
+cluster_assignments <- grp$grp
+genotype_data$cluster <- cluster_assignments
+
+dapc1 <- dapc(data_GenInd, grp$grp, n.pca= 90 , n.clust=2, n.da = 100)
+
+
+# results visualization  
+scatter(dapc1)
+compoplot(dapc1, posi="bottomright", txt.leg=paste("Cluster", 1:2), lab="", ncol=1, xlab="individuals")
+
+#found special individual 
+# Convert the posterior probabilities to a data frame
+posterior_data <- as.data.frame(dapc1$posterior)
+
+# Add individual names as a column in the data frame
+posterior_data$Individual <- rownames(posterior_data)
+
+# Melt the data frame for visualization
+melted_data <- reshape2::melt(posterior_data, id.vars = "Individual", variable.name = "Cluster", value.name = "Probability")
+
+# Create a scatter plot with individual names as labels
+ggplot(melted_data, aes(x = Cluster, y = Probability, color = Cluster, label = Individual)) +
+  geom_point() +
+  xlab("Cluster") +
+  ylab("Probability") +
+  labs(color = "Cluster") +
+  theme_minimal() +
+  geom_text(nudge_y = 0.02)  # Add labels slightly above the data points
+
+
+#reomve uncertin cluster
+# Assuming you have stored the posterior probabilities in a variable named 'posterior'
+# Subset the main table to include only individuals with probability 1.00 in either cluster
+new_data <- data[posterior_data[, 1] == 1 | posterior_data[, 2] == 1, ]
+
+# View the filtered data
+print(filtered_data)
+
+write.csv2(filtered_data, "data_new.csv")
+#how to check now ?
+```
+
+
+
+
+## 4. Data map visualization
 
 just to look at where each population is located 
 
@@ -101,202 +218,17 @@ legend.pie(-4.5, 41.4, labels = c("Asex","Sex"),
 ```
 ------------------------------------------------------------------------
 
-# 4. Microsatellite marker data
 
 
-```{r}
-#create table of genotype
 
-# Select columns with "Mlp" in the name and the first column as isolate id
-genotype_cols <- c("Isolate", grep("Mlp", names(data), value = TRUE))
-genotype_data <- data[, genotype_cols]
+----------------------------------------------------------------
 
-#make isolate id as column names 
-rownames(genotype_data) <- genotype_data[,1]
-#delete the first column
-genotype_data$Isolate = NULL
-
-
-# Convert to genind object
-data_GenInd <- df2genind(
-  X = genotype_data,   #data.frame containing allele data only 
-  sep = NULL,
-  ncode = 3,           #an optional integer giving the number of characters used for coding one genotype at one locus.
-  ind.names = rownames(genotype_data),  # individuals names
-  loc.names = colnames(genotype_data),  # markers names
-  pop = data$Pop,                       # giving the population of each individual
-  NA.char = "999",                      # string corresponding to missing allele 999 or 999999
-  ploidy = 2,
-  type = "codom",                       #codom' stands for 'codominant' (e.g. microstallites, allozymes)
-  strata = NULL,
-  hierarchy = NULL,
-  check.ploidy = getOption("adegenet.check.ploidy")
-)
-
-
-# ca marche !!
-summary(data_GenInd)
-
-Nb_Pop = length(levels(data_GenInd@pop)) # number of population
-is.numeric(Nb_Pop)
-
-#convert Genind to Genepop format
-data_Genpop <- genind2genpop(data_GenInd, process.other=TRUE)
-data_Genpop # See result
-```
-
-------------------------------------------------------------------------
-
-# 5. Calculate the Genetic distance as Euclidean for NJ tree
+#  try NJ it with popper
  
 ```{r}
-#Edwards' distance (Euclidean)
-data.dist.edwards <- dist.genpop(x=data_Genpop, method=2, diag=T, upper=T)
-is.euclid(data.dist.edwards, plot=TRUE, print=TRUE, tol=1e-10) # FALSE = Yes
-
-#Calculate and test NJ tree for Euclidean 
-data.nj <- nj(data.dist.edwards) # Calculates the tree 
-# Test tree quality - plot original vs. reconstructed distance
-plot(as.vector(data.dist.edwards), as.vector(as.dist(cophenetic(data.nj))),
-     xlab="Original distance", ylab="Reconstructed distance")
-abline(lm(as.vector(data.dist.edwards) ~ as.vector(as.dist(cophenetic(data.nj)))), col="red")
-cor.test(x=as.vector(data.dist.edwards), y=as.vector(as.dist(cophenetic (data.nj))), alternative="two.sided") # Testing the correlation
-# Linear model for above graph
-summary(lm(as.vector(data.dist.edwards) ~ as.vector(as.dist(cophenetic(data.nj))))) # Prints summary text
-# Plot a basic tree - see ?plot.phylo for details
-plot.phylo(x=data.nj, type="phylogram")
-
-
-
-```
-
-------------------------------------------------------------------------
-
-# 6. Calculate the Genetic distance as non-Euclidean for NJ tree
-the final tree for me don't make any sense 
- 
-```{r}
-# Standard Nei's genetic distance (D) 1972 (not Euclidean)
-data.dist.D <- dist.genpop(x=data_Genpop, method=1, diag=T, upper=T)
-is.euclid(data.dist.D, plot=TRUE, print=TRUE, tol=1e-10) # FALSE 
-
-
-data.dist.D.m <- cailliez(distmat=data.dist.D, print=FALSE, tol=1e-07, cor.zero=TRUE)
-is.euclid(data.dist.D.m, plot=TRUE, print=TRUE, tol=1e-10) # TRUE = OK
-
-#Calculate and test NJ tree for Euclidean 
-data.nj <- nj(data.dist.D.m) # Calculates the tree 
-# Test tree quality - plot original vs. reconstructed distance
-plot(as.vector(data.dist.D.m), as.vector(as.dist(cophenetic(data.nj))),
-     xlab="Original distance", ylab="Reconstructed distance")
-abline(lm(as.vector(data.dist.D.m) ~ as.vector(as.dist(cophenetic(data.nj)))), col="red")
-cor.test(x=as.vector(data.dist.D.m), y=as.vector(as.dist(cophenetic (data.nj))), alternative="two.sided") # Testing the correlation
-# Linear model for above graph
-summary(lm(as.vector(data.dist.D.m) ~ as.vector(as.dist(cophenetic(data.nj))))) # Prints summary text
-# Plot a basic tree - see ?plot.phylo for details
-plot.phylo(x=data.nj, type="phylogram",edge.width=1, main="NJ")
-
-```
-------------------------------------------------------------------------
-
-# 7. Microsatellite marker data as Mll
-
-```{r}
-# Convert to genind object
-data_GenInd_mll <- df2genind(
-  X = genotype_data,   #data.frame containing allele data only 
-  sep = NULL,
-  ncode = 3,           #an optional integer giving the number of characters used for coding one genotype at one locus.
-  ind.names = rownames(genotype_data),  # individuals names
-  loc.names = colnames(genotype_data),  # markers names
-  pop = data$Mll,                       # giving the population of each individual
-  NA.char = "999",                      # string corresponding to missing allele 999 or 999999
-  ploidy = 2,
-  type = "codom",                       #codom' stands for 'codominant' (e.g. microstallites, allozymes)
-  strata = NULL,
-  hierarchy = NULL,
-  check.ploidy = getOption("adegenet.check.ploidy")
-)
-
-
-# ca marche !!
-summary(data_GenInd_mll)
-
-Nb_Pop_mll = length(levels(data_GenInd_mll@pop)) # number of mll
-is.numeric(Nb_Pop_mll)
-
-#Do you think it is important to dd coordinates to genotype data?
-
-#convert Genind to Genepop format
-data_Genpop_mll <- genind2genpop(data_GenInd_mll, process.other=TRUE)
-data_Genpop_mll # See result
-```
-
-------------------------------------------------------------------------
-# 8. Calculate the Genetic distance as non-Euclidean for NJ tree for Mll
-the final tree for me don't make any sense 
- 
-```{r}
-# Standard Nei's genetic distance (D) 1972 (not Euclidean)
-data.dist.D_mll <- dist.genpop(x=data_Genpop_mll, method=1, diag=T, upper=T)
-is.euclid(data.dist.D_mll, plot=TRUE, print=TRUE, tol=1e-10) # FALSE 
-
-
-data.dist.D_mll.m <- cailliez(distmat=data.dist.D_mll, print=FALSE, tol=1e-07, cor.zero=TRUE)
-is.euclid(data.dist.D.m, plot=TRUE, print=TRUE, tol=1e-10) # TRUE = OK
-
-#Calculate and test NJ tree for Euclidean 
-data.nj.mll <- nj(data.dist.D_mll.m) # Calculates the tree 
-# Test tree quality - plot original vs. reconstructed distance
-plot(as.vector(data.dist.D_mll.m), as.vector(as.dist(cophenetic(data.nj.mll))),
-     xlab="Original distance", ylab="Reconstructed distance")
-abline(lm(as.vector(data.dist.D_mll.m) ~ as.vector(as.dist(cophenetic(data.nj.mll)))), col="red")
-cor.test(x=as.vector(data.dist.D_mll.m), y=as.vector(as.dist(cophenetic (data.nj.mll))), alternative="two.sided") # Testing the correlation
-# Linear model for above graph
-summary(lm(as.vector(data.dist.D_mll.m) ~ as.vector(as.dist(cophenetic(data.nj.mll))))) # Prints summary text
-# Plot a basic tree - see ?plot.phylo for details
-plot.phylo(x=data.nj.mll, type="phylogram",edge.width=1, main="NJ")
-```
-
-------------------------------------------------------------------------
-
-# 9. try manual analysis
-
-```{r}
-# Assuming your genotype data is stored in a data frame called genotype_data
-
-# Create an empty data frame to store the separated values
-separated_data <- list()
-
-# Iterate over each column in the genotype data
-for (col in colnames(genotype_data)) {
-  # Split each three-digit value into two columns
-  separated_values <- cbind(substr(genotype_data[, col], 1, 3), substr(genotype_data[, col], 4, 6))
-  
-  # Add the separated values to the new data frame
-  separated_data <- cbind(separated_data, separated_values)
-  
-
-}
-
-# Convert the values in the matrix to numeric
-separated_data <- apply(separated_data, 2, as.numeric)
-
-# Assign column names to the separated data
-colnames(separated_data) <- rep(colnames(genotype_data), each = 2)
-
-# Assign row names to the separated data
-rownames(separated_data) <- rownames(genotype_data)
-
-# check the separated data
-head (separated_data)
-class(separated_data[1,1])
-
-dist_v <- dist(separated_data, method = "euclidean", diag = TRUE, upper = TRUE)
-
-#Neighbor-Joining Tree Estimation
-#This function performs the neighbor-joining tree estimation of Saitou and Nei (1987).
-tree <- nj(dist_v)
+# Calculate distance matrix and build NJ tree
+dist <- diss.dist(data_GenInd)
+tree <- nj(dist)
 
 # Create group information based on 'Profil' column
 groupInfo <- split(data$Isolate, data$Profil)
@@ -304,13 +236,68 @@ groupInfo <- split(data$Isolate, data$Profil)
 # Group the tree labels based on the group information
 tree <- groupOTU(tree, groupInfo)
 
-# Plot the circular tree with grouped labels based on 'Profil' information
-ggtree(tree, aes(color = group)) +
-    geom_tiplab(size = 1)
+# Create a dataframe for annotation
+dat1 <- data.frame(
+  ID = data$Isolate,
+  lat = data$Lat,
+  long = data$Long,
+  Location = data$Site,
+  Group = data$Profil,
+  Year = data$Year
+)
 
-# Generate bootstrap support values for the tree
-boot_tree <- boot.phylo(tree, dist_v, FUN = nj, B = 100)
+# Create the ggtree plot with circular layout
+options(ignore.negative.edge=TRUE)
+p <- ggtree(tree, aes(color = group))
+p
+
+# Use %<+% of ggtree to add annotation dataset to the tree
+p1 <- p %<+% dat1
+
+# Initialize fill scale using new_scale_fill() from ggnewscale package
+p2 <- p +
+  geom_fruit(
+    data = dat1,
+    geom = geom_col,
+    mapping = aes(y = ID, x = Year, fill = Location),  # Map 'Location' to fill
+    pwidth = 0.4,
+    offset = 0.01,
+    axis.params = list(
+      axis = "x",  # Add x-axis text
+      text.angle = -45,  # Adjust text angle
+      hjust = 0,  # Adjust horizontal position
+      text.size = 2.5,
+      line.size = 0.4,
+      line.color = "black"
+    ),
+    grid.params = list(color = "black", linetype = 5, size = 0.4, alpha = 0.8)  # Add grid lines
+  ) +
+  scale_shape_manual(
+    values = 1:length(unique(dat1$Location))  # Set shape values
+  ) +
+  theme(
+    #legend.position = c(1.15, 0.5),  # Adjust legend position
+    legend.background = element_rect(fill = NA),  # Set legend background
+    legend.title = element_text(size = 9),  # Adjust legend title size
+    legend.text = element_text(size = 7),  # Adjust legend text size
+    legend.spacing.y = unit(0.3, "cm")  # Adjust legend spacing (y orientation)
+  ) 
+   #+ geom_treescale(fontsize=2, linesize=0.3, x=-10, y=1000)
+
+p2
+# Modify legend titles
+p2 <- p2 +
+  labs(fill = "Location", color = "Profile") 
+  
+
+p2
+#ggsave("tree_plot2.png", p2, width = 17, height = 8, dpi = 600)  # Save the plot with desired dimensions
 
 ```
+----------------------------------------------------------------
 
-------------------------------------------------------------------------
+
+
+
+
+

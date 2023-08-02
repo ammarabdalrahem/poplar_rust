@@ -11,10 +11,10 @@ output: html_notebook
 
 Remember to re-run this code every time you re-open this R Notebook.
 
-```{r, eval=TRUE}
+```{r, echo=FALSE}
 #Code to install packages if necessary, and read them with library function
 
-required_packages <- c("ggplot2","readxl","tidyverse","genepop","hierfstat","here","mapdata",
+required_packages <- c("knitr","ggplot2","readxl","tidyverse","genepop","hierfstat","here","mapdata",
                        "mapplots","data.table","grDevices","colorspace","adegenet","poppr","pegas","ape","ade4","remotes","ggtree","ggtreeExtra")
 for (package in required_packages) {
   if (package %in% row.names(installed.packages())) {
@@ -32,7 +32,7 @@ for (package in required_packages) {
 ## 2. Obtain data
 
 
-```{r}
+```{r, echo=FALSE}
 # get the path of the current R script
 path <- dirname(rstudioapi::getSourceEditorContext()$path)
 
@@ -127,12 +127,14 @@ mll_assignments<- mlg.filter(data_Genclone, threshold = farthest_thresh, distanc
 
 genotype_data$MLL <- mll_assignments
 
+
+
 #write.csv2(genotype_data, "data_new.csv")
 
 ```
 
 
-## Identification the individuals profile(sex/asex)
+## Identification the individuals profile(sex/asex) (two clusters)
 
 ```{r}
 # First identification by cluster
@@ -170,15 +172,205 @@ ggplot(melted_data, aes(x = Cluster, y = Probability, color = Cluster, label = I
 #reomve uncertin cluster
 # Assuming you have stored the posterior probabilities in a variable named 'posterior'
 # Subset the main table to include only individuals with probability 1.00 in either cluster
-new_data <- data[posterior_data[, 1] == 1 | posterior_data[, 2] == 1, ]
+certain_data <- data[posterior_data[, 1] >= 0.8 | posterior_data[, 2] >= 0.8 , ]
 
-# View the filtered data
-print(filtered_data)
 
-write.csv2(filtered_data, "data_new.csv")
-#how to check now ?
+# Create a new table for uncertain individuals
+uncertain_data <- data[!(posterior_data[, 1] >= 0.8 | posterior_data[, 2] >= 0.8), ]
+
+genotype_data$Cluster <- ifelse(posterior_data[, 1] >= 0.8, "Cluster 1", #80% 
+                       ifelse(posterior_data[, 2] >= 0.8, "Cluster 2", 
+                              ifelse(posterior_data[, 1] > posterior_data[, 2], 
+                                     "Cluster 1 (Closer to Cluster 2)", 
+                                     ifelse(posterior_data[, 2] > posterior_data[, 1], 
+                                            "Cluster 2 (Closer to Cluster 1)", 
+                                            "None Determined"))))
+
+
+
+
+
 ```
 
+##G/N and Fis calculation for cluster groups
+
+```{r}
+#create table of genotype
+
+# Select columns with "Mlp" in the name and the first column as isolate id
+genotype_cols <- c(grep("Mlp", names(genotype_data), value = TRUE))
+genotype_data_2 <- data[, genotype_cols]
+
+#make isolate id as column names 
+rownames(genotype_data_2) <- rownames(genotype_data)
+
+
+# Convert to genind object
+data_GenInd_Cluster <- df2genind(
+  X = genotype_data_2,   #data.frame containing allele data only 
+  sep = NULL,
+  ncode = 3,           #an optional integer giving the number of characters used for coding one genotype at one locus.
+  ind.names = rownames(genotype_data_2),  # individuals names
+  loc.names = colnames(genotype_data_2),  # markers names
+  pop = genotype_data$Cluster,                       # giving the population of each individual
+  NA.char = "999",                      # string corresponding to missing allele 999 or 999999
+  ploidy = 2,
+  type = "codom",                       #codom' stands for 'codominant' (e.g. microstallites, allozymes)
+  strata = NULL,
+  hierarchy = NULL,
+  check.ploidy = getOption("adegenet.check.ploidy")
+)
+
+Nb_Pop = length(levels(data_GenInd_Cluster@pop))
+
+# Attribution des différents vecteurs que l'on souhaite calculer
+N <- vector(mode ="integer", length = Nb_Pop)
+GsurN<- vector(mode ="numeric", length = Nb_Pop)
+Ho <- vector(mode ="numeric", length = Nb_Pop)
+Hs <- vector(mode ="numeric", length = Nb_Pop)
+Fis <- vector(mode ="numeric", length = Nb_Pop)
+rbarD<- vector(mode ="numeric", length = Nb_Pop)
+
+Pop <- levels(data_GenInd_Cluster$pop)
+
+## Utilisation de Poppr pour récupérer les premiers indices N, G/N et rbarD
+Table_PPR <- poppr(data_GenInd_Cluster) # marche bien
+
+rbarD <- Table_PPR$rbarD[1:Nb_Pop]
+N <- Table_PPR$N[1:Nb_Pop]
+GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
+
+#calcul de la proba de DL
+ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
+for (i in 1:Nb_Pop) {
+  i=1
+  Temp_Sample <- popsub(data_GenInd_Cluster, Table_PPR$Pop[i])
+  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] # Attention c'est assez long à tourner 
+}
+
+
+## Utilisation de Fstat pour calculer les autres indices HO, HE, Fis et Ar
+
+data_Fstat <-genind2hierfstat(data_GenInd_Cluster)
+
+# Boucles qui permet de calculer les indices souhaités pour chaque population (et pas la globalité)
+a =0
+for (i in levels(data_Fstat$pop) ){
+  Poptmp <- data_GenInd_Cluster[which(data_GenInd_Cluster$pop==i),]
+  #Poptmp  <-genind2hierfstat(Poptmp)
+  fstat_basic_Temporel <- basic.stats(Poptmp)
+  a = a+1
+  Ho[a]<-fstat_basic_Temporel$overall["Ho"]  
+  Hs[a]<-fstat_basic_Temporel$overall["Hs"]  
+  Fis[a]<-fstat_basic_Temporel$overall["Fis"] 
+}
+
+# calcul de la richess allélique
+Obj_Ar <- allelic.richness(data_Fstat[which(data_Fstat[,"pop"]!="NA"),])
+Ar_per_loc <- Obj_Ar$Ar
+#Ar_per_loc <- Ar_per_loc[c(1:2, 4:13, 15:23),] # pour sortir les locus 100 et 26 qui sont absents de certaines pops
+Ar<- vector(mode ="numeric", length = Nb_Pop)
+for (i in 1:Nb_Pop){ 
+  Ar[i] = mean(Ar_per_loc[,i])
+}
+
+## Mise en forme du tableau final
+Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis, rbarD)
+colnames(Tab_Indices_per_pop) <- Pop
+Tab_Indices_per_pop <- t(Tab_Indices_per_pop)
+kable(Tab_Indices_per_pop, digits = 3)
+
+```
+
+##G/N and Fis calculation for Mll
+
+```{r}
+#create table of genotype
+
+# Select columns with "Mlp" in the name and the first column as isolate id
+genotype_cols <- c(grep("Mlp", names(genotype_data), value = TRUE))
+genotype_data_2 <- data[, genotype_cols]
+
+#make isolate id as column names 
+rownames(genotype_data_2) <- rownames(genotype_data)
+
+
+# Convert to genind object
+data_GenInd_MLL <- df2genind(
+  X = genotype_data_2,   #data.frame containing allele data only 
+  sep = NULL,
+  ncode = 3,           #an optional integer giving the number of characters used for coding one genotype at one locus.
+  ind.names = rownames(genotype_data_2),  # individuals names
+  loc.names = colnames(genotype_data_2),  # markers names
+  pop = genotype_data$MLL,                       # giving the population of each individual
+  NA.char = "999",                      # string corresponding to missing allele 999 or 999999
+  ploidy = 2,
+  type = "codom",                       #codom' stands for 'codominant' (e.g. microstallites, allozymes)
+  strata = NULL,
+  hierarchy = NULL,
+  check.ploidy = getOption("adegenet.check.ploidy")
+)
+
+Nb_Pop = length(levels(data_GenInd_MLL@pop))
+
+# Attribution des différents vecteurs que l'on souhaite calculer
+N <- vector(mode ="integer", length = Nb_Pop)
+GsurN<- vector(mode ="numeric", length = Nb_Pop)
+Ho <- vector(mode ="numeric", length = Nb_Pop)
+Hs <- vector(mode ="numeric", length = Nb_Pop)
+Fis <- vector(mode ="numeric", length = Nb_Pop)
+rbarD<- vector(mode ="numeric", length = Nb_Pop)
+
+Pop <- levels(data_GenInd_MLL$pop)
+
+## Utilisation de Poppr pour récupérer les premiers indices N, G/N et rbarD
+Table_PPR <- poppr(data_GenInd_MLL) # marche bien
+
+rbarD <- Table_PPR$rbarD[1:Nb_Pop]
+N <- Table_PPR$N[1:Nb_Pop]
+GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
+
+#calcul de la proba de DL
+ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
+for (i in 1:Nb_Pop) {
+  i=1
+  Temp_Sample <- popsub(data_GenInd_MLL, Table_PPR$Pop[i])
+  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] # Attention c'est assez long à tourner 
+}
+
+
+## Utilisation de Fstat pour calculer les autres indices HO, HE, Fis et Ar
+
+data_Fstat <-genind2hierfstat(data_GenInd_Cluster)
+
+# Boucles qui permet de calculer les indices souhaités pour chaque population (et pas la globalité)
+a =0
+for (i in levels(data_Fstat$pop) ){
+  Poptmp <- data_GenInd_MLL[which(data_GenInd_MLL$pop==i),]
+  #Poptmp  <-genind2hierfstat(Poptmp)
+  fstat_basic_Temporel <- basic.stats(Poptmp)
+  a = a+1
+  Ho[a]<-fstat_basic_Temporel$overall["Ho"]  
+  Hs[a]<-fstat_basic_Temporel$overall["Hs"]  
+  Fis[a]<-fstat_basic_Temporel$overall["Fis"] 
+}
+
+# calcul de la richess allélique
+Obj_Ar <- allelic.richness(data_Fstat[which(data_Fstat[,"pop"]!="NA"),])
+Ar_per_loc <- Obj_Ar$Ar
+#Ar_per_loc <- Ar_per_loc[c(1:2, 4:13, 15:23),] # pour sortir les locus 100 et 26 qui sont absents de certaines pops
+Ar<- vector(mode ="numeric", length = Nb_Pop)
+for (i in 1:Nb_Pop){ 
+  Ar[i] = mean(Ar_per_loc[,i])
+}
+
+## Mise en forme du tableau final
+Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis, rbarD)
+colnames(Tab_Indices_per_pop) <- Pop
+Tab_Indices_per_mll <- t(Tab_Indices_per_pop)
+kable(Tab_Indices_per_mll, digits = 3)
+
+```
 
 
 

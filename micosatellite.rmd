@@ -55,8 +55,8 @@ data <- as.data.frame(data)
 #data <- data[!(data$Profil == "sex" & !grepl("Prelles", data$Site, ignore.case = TRUE)), ]
 
 # remove unknown Profil & population
-data <- data[!(data$Profil == "NA" | data$Pop == "NA"), ]
-
+data <- data[!(data$Pop == "NA"), ]
+write.csv2(data, "main_data_new.csv")
 #take a look to data
 
 head(data)
@@ -122,16 +122,19 @@ print(nearest_thresh  <- cutoff_predictor(data_filtered$nearest$THRESHOLDS))
 
 #Define the MLL threshold 0.5, algorithm	Farthest neighbor
 
-mll_assignments<- mlg.filter(data_Genclone, threshold = farthest_thresh, distance = "diss.dist", threads = 1L, missing = "asis") 
+mll_assignments<- mlg.filter(data_Genclone, threshold = average_thresh , distance = "diss.dist", threads = 1L, missing = "asis", algorithm = "average_neighbor") 
 
+genotype_data$MLL_poppr <- mll_assignments
 
-genotype_data$MLL <- mll_assignments
-
+#clean
+rm(data_Genclone, data_filtered) 
 
 
 #write.csv2(genotype_data, "data_new.csv")
 
 ```
+
+
 
 
 ## Identification the individuals profile(sex/asex) (two clusters)
@@ -188,9 +191,17 @@ genotype_data$Cluster <- ifelse(posterior_data[, 1] >= 0.8, "Cluster 1", #80%
 
 
 
+#Remove uncertain_data
+
+#genotype_data <- subset(genotype_data, Cluster %in% c("Cluster 1", "Cluster 2"))
+
+
+rm(certain_data, melted_data,dapc1,uncertain_data ,posterior_data, grp) 
 
 
 ```
+
+
 
 ##G/N and Fis calculation for cluster groups
 
@@ -280,29 +291,50 @@ colnames(Tab_Indices_per_pop) <- Pop
 Tab_Indices_per_pop <- t(Tab_Indices_per_pop)
 kable(Tab_Indices_per_pop, digits = 3)
 
+
+# Tab_Indices_per_pop is the dataframe containing the results
+# Loop through each row of the dataframe
+for (i in 1:nrow(Tab_Indices_per_pop)) {
+  cluster_name <- rownames(Tab_Indices_per_pop)[i]  # Get the cluster name
+  
+  # Check if the Fis value is negative
+  if (Tab_Indices_per_pop[i, "Fis"] < 0) {
+    # If Fis is negative, set the "Reproduction" column to "clonal" for the corresponding cluster
+    genotype_data$Reproduction[genotype_data$Cluster == cluster_name] <- "clonal"
+  } else {
+    # If Fis is non-negative, set the "Reproduction" column to "sex" for the corresponding cluster
+    genotype_data$Reproduction[genotype_data$Cluster == cluster_name] <- "sex"
+  }
+}
+
 ```
 
-##G/N and Fis calculation for Mll
+##G/N and Fis calculation for Mll for asexual group
 
 ```{r}
 #create table of genotype
 
 # Select columns with "Mlp" in the name and the first column as isolate id
-genotype_cols <- c(grep("Mlp", names(genotype_data), value = TRUE))
-genotype_data_2 <- data[, genotype_cols]
+
+clonal_data <- genotype_data[genotype_data$Reproduction == "clonal", ]
+
+# Select columns with "Mlp" in the name and the first column as isolate id
+genotype_cols_clonal <- c(grep("Mlp", names(clonal_data), value = TRUE))
+genotype_clonal <- clonal_data[, genotype_cols_clonal]
 
 #make isolate id as column names 
-rownames(genotype_data_2) <- rownames(genotype_data)
+rownames(genotype_clonal) <- rownames(clonal_data)
+
 
 
 # Convert to genind object
-data_GenInd_MLL <- df2genind(
-  X = genotype_data_2,   #data.frame containing allele data only 
+data_GenInd_clonal_MLL <- df2genind(
+  X = genotype_clonal,   #data.frame containing allele data only 
   sep = NULL,
   ncode = 3,           #an optional integer giving the number of characters used for coding one genotype at one locus.
-  ind.names = rownames(genotype_data_2),  # individuals names
-  loc.names = colnames(genotype_data_2),  # markers names
-  pop = genotype_data$MLL,                       # giving the population of each individual
+  ind.names = rownames(genotype_clonal),  # individuals names
+  loc.names = colnames(genotype_clonal),  # markers names
+  pop = clonal_data$MLL,                       # giving the population of each individual
   NA.char = "999",                      # string corresponding to missing allele 999 or 999999
   ploidy = 2,
   type = "codom",                       #codom' stands for 'codominant' (e.g. microstallites, allozymes)
@@ -310,8 +342,11 @@ data_GenInd_MLL <- df2genind(
   hierarchy = NULL,
   check.ploidy = getOption("adegenet.check.ploidy")
 )
+data_Genclone_clonal <- as.genclone(data_GenInd_clonal_MLL)
 
-Nb_Pop = length(levels(data_GenInd_MLL@pop))
+data_sex_filtered <-filter_stats(data_Genclone_clonal, distance = diss.dist, plot = TRUE, missing = "asis")
+
+Nb_Pop = length(levels(data_GenInd_clonal_MLL@pop))
 
 # Attribution des différents vecteurs que l'on souhaite calculer
 N <- vector(mode ="integer", length = Nb_Pop)
@@ -321,10 +356,10 @@ Hs <- vector(mode ="numeric", length = Nb_Pop)
 Fis <- vector(mode ="numeric", length = Nb_Pop)
 rbarD<- vector(mode ="numeric", length = Nb_Pop)
 
-Pop <- levels(data_GenInd_MLL$pop)
+Pop <- levels(data_GenInd_clonal_MLL$pop)
 
 ## Utilisation de Poppr pour récupérer les premiers indices N, G/N et rbarD
-Table_PPR <- poppr(data_GenInd_MLL) # marche bien
+Table_PPR <- poppr(data_GenInd_clonal_MLL) # marche bien
 
 rbarD <- Table_PPR$rbarD[1:Nb_Pop]
 N <- Table_PPR$N[1:Nb_Pop]
@@ -334,19 +369,19 @@ GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   i=1
-  Temp_Sample <- popsub(data_GenInd_MLL, Table_PPR$Pop[i])
+  Temp_Sample <- popsub(data_GenInd_clonal_MLL, Table_PPR$Pop[i])
   ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] # Attention c'est assez long à tourner 
 }
 
 
 ## Utilisation de Fstat pour calculer les autres indices HO, HE, Fis et Ar
 
-data_Fstat <-genind2hierfstat(data_GenInd_Cluster)
+data_Fstat <-genind2hierfstat(data_GenInd_clonal_MLL)
 
 # Boucles qui permet de calculer les indices souhaités pour chaque population (et pas la globalité)
 a =0
 for (i in levels(data_Fstat$pop) ){
-  Poptmp <- data_GenInd_MLL[which(data_GenInd_MLL$pop==i),]
+  Poptmp <- data_GenInd_clonal_MLL[which(data_GenInd_clonal_MLL$pop==i),]
   #Poptmp  <-genind2hierfstat(Poptmp)
   fstat_basic_Temporel <- basic.stats(Poptmp)
   a = a+1
@@ -369,6 +404,85 @@ Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis, rbarD)
 colnames(Tab_Indices_per_pop) <- Pop
 Tab_Indices_per_mll <- t(Tab_Indices_per_pop)
 kable(Tab_Indices_per_mll, digits = 3)
+
+# Assuming 'clonal_data' is your data frame containing MLG and MLL information
+mlg_counts <- aggregate(MLG ~ MLL_poppr, data = clonal_data, FUN = function(x) length(unique(x)))
+rownames(mlg_counts) <- mlg_counts[,1]
+
+asexual_lineages <- merge(mlg_counts,Tab_Indices_per_mll,by="row.names",all.x=TRUE)
+
+
+
+```
+
+
+##check the new MLL anf old Mll
+
+```{r}
+
+clonal_data$mll <- data$Mll[match(row.names(clonal_data), data$Isolate)]
+# Create a contingency table
+contingency_table <- table(clonal_data$MLL_poppr, clonal_data$mll)
+
+# Print the contingency table
+write.table(contingency_table, file = "contingency_table.csv", sep = ",", quote = FALSE)
+
+```
+
+
+
+
+
+
+
+##G/N and Fis calculation for Mll for sexual group
+
+```{r}
+#create table of genotype
+
+# Select columns with "Mlp" in the name and the first column as isolate id
+
+sex_data <- genotype_data[genotype_data$Reproduction == "sex", ]
+
+# Select columns with "Mlp" in the name and the first column as isolate id
+genotype_cols_sex <- c(grep("Mlp", names(sex_data), value = TRUE))
+genotype_sex <- sex_data[, genotype_cols_sex]
+
+#make isolate id as column names 
+rownames(genotype_sex) <- rownames(sex_data)
+
+
+
+# Convert to genind object
+data_GenInd_sex_MLL <- df2genind(
+  X = genotype_sex,   #data.frame containing allele data only 
+  sep = NULL,
+  ncode = 3,           #an optional integer giving the number of characters used for coding one genotype at one locus.
+  ind.names = rownames(genotype_sex),  # individuals names
+  loc.names = colnames(genotype_sex),  # markers names
+  pop = NULL,                       # giving the population of each individual
+  NA.char = "999",                      # string corresponding to missing allele 999 or 999999
+  ploidy = 2,
+  type = "codom",                       #codom' stands for 'codominant' (e.g. microstallites, allozymes)
+  strata = NULL,
+  hierarchy = NULL,
+  check.ploidy = getOption("adegenet.check.ploidy")
+)
+
+
+data_Genclone_sex <- as.genclone(data_GenInd_sex_MLL)
+
+data_sex_filtered <-filter_stats(data_Genclone_sex, distance = diss.dist, plot = TRUE, missing = "asis")
+
+#Arnaud-Haond et al. 2007, @bailleul2016rclone
+print(farthest_thresh <- cutoff_predictor(data_sex_filtered$farthest$THRESHOLDS))
+
+# “UPGMA ” algorithm.
+print(average_thresh  <- cutoff_predictor(data_sex_filtered$average$THRESHOLDS))
+
+# “nearest neighbor” algorithm.
+print(nearest_thresh  <- cutoff_predictor(data_sex_filtered$nearest$THRESHOLDS))
+
 
 ```
 
@@ -419,6 +533,7 @@ legend.pie(-4.5, 41.4, labels = c("Asex","Sex"),
  
 ```{r}
 # Calculate distance matrix and build NJ tree
+
 dist <- diss.dist(data_GenInd)
 tree <- nj(dist)
 

@@ -56,7 +56,6 @@ data <- as.data.frame(data)
 
 # remove unknown Profil & population
 data <- data[!(data$Pop == "NA"), ]
-write.csv2(data, "main_data_new.csv")
 #take a look to data
 
 head(data)
@@ -122,7 +121,7 @@ print(nearest_thresh  <- cutoff_predictor(data_filtered$nearest$THRESHOLDS))
 
 #Define the MLL threshold 0.5, algorithm	Farthest neighbor
 
-mll_assignments<- mlg.filter(data_Genclone, threshold = average_thresh , distance = "diss.dist", threads = 1L, missing = "asis", algorithm = "average_neighbor") 
+mll_assignments<- mlg.filter(data_Genclone, threshold = average_thresh , algorithm = "average_neighbor" , distance = "diss.dist", threads = 1L, missing = "asis" ) 
 
 genotype_data$MLL_poppr <- mll_assignments
 
@@ -416,23 +415,127 @@ asexual_lineages <- merge(mlg_counts,Tab_Indices_per_mll,by="row.names",all.x=TR
 ```
 
 
-##check the new MLL anf old Mll
+##check the new MLL anf old Mll for asexual
 
 ```{r}
 
 clonal_data$mll <- data$Mll[match(row.names(clonal_data), data$Isolate)]
 # Create a contingency table
-contingency_table <- table(clonal_data$MLL_poppr, clonal_data$mll)
+contingency_table_clonal <- table(clonal_data$MLL_poppr, clonal_data$mll)
 
 # Print the contingency table
-write.table(contingency_table, file = "contingency_table.csv", sep = ",", quote = FALSE)
+write.table(contingency_table_clonal, file = "contingency_table_clonal.csv", sep = ",", quote = FALSE)
 
 ```
 
 
+##check the new MLL anf old Mll for sexual
+```{r}
+
+sex_data$mll <- data$Mll[match(row.names(sex_data), data$Isolate)]
+# Create a contingency table
+contingency_table_sex <- table(sex_data$MLL_poppr, sex_data$mll)
+
+# Print the contingency table
+write.table(contingency_table_sex, file = "contingency_table_sex.csv", sep = ",", quote = FALSE)
+
+
+# Find row and column names where values are higher than 3
+high_value_indices <- which(contingency_table_sex > 3, arr.ind = TRUE)
+high_value_rows <- rownames(contingency_table_sex)[high_value_indices[, 1]]
+high_value_cols <- colnames(contingency_table_sex)[high_value_indices[, 2]]
+high_values <- contingency_table_sex[high_value_indices]
+
+# Create a new table with row names, column names, and values
+high_values_table <- data.frame(RowName = high_value_rows, ColumnName = high_value_cols, Value = high_values)
+
+write.table(high_values_table, file = "contingency_table_sex.csv", sep = ",", quote = FALSE)
+
+
+```
+
+
+## create table of repeated Mll diffrent years
+```{r}
+
+genotype_data$year <- data$Year[match(row.names(genotype_data), data$Isolate)]
+
+# Calculate the frequency of each MLL-Year combination
+repeated_MLL_table <- genotype_data [,c("MLL_poppr","year")]
+rownames(repeated_MLL_table) <- NULL
+# Rename the columns for clarity
+colnames(repeated_MLL_table) <- c("MLL",  "year")
 
 
 
+# Create an empty list to store the dictionary
+mll_year_dict <- list()
+
+# Loop through each row in the repeated_MLL_table
+for (i in 1:nrow(repeated_MLL_table)) {
+  mll <- repeated_MLL_table$MLL[i]
+  year <- repeated_MLL_table$year[i]
+  
+  # If the MLL is not yet in the dictionary, add it with the current year
+  if (!(mll %in% names(mll_year_dict))) {
+    mll_year_dict[[as.character(mll)]] <- list(year)
+  } else {
+    # If the MLL is already in the dictionary, append the year to its list
+    mll_year_dict[[as.character(mll)]] <- c(mll_year_dict[[as.character(mll)]], year)
+  }
+}
+
+# Print the dictionary
+print(mll_year_dict)
+mll_year_dict["915"]
+
+# Convert the dictionary to a dataframe
+mll_year_df <- data.frame(
+  MLL = as.integer(names(mll_year_dict)),
+  Years = sapply(mll_year_dict, paste, collapse = ", ")
+)
+
+
+
+# Create a new column to store the counts
+mll_year_df$YearCount <- NA
+
+# Loop through each row in repeated_MLL_table
+for (i in 1:nrow(mll_year_df)) {
+  # Filter the mll_year_df for the current MLL
+  filtered_df <- mll_year_df[mll_year_df$MLL == mll_year_df$MLL[i], ]
+  
+  # Count how many years are associated with the current MLL
+  years_count <- length(unlist(strsplit(filtered_df$Years, ", ")))
+  
+  # Assign the count to the YearCount column
+  mll_year_df$YearCount[i] <- years_count
+}
+
+# Loop through each row in repeated_MLL_table
+for (i in 1:nrow(repeated_MLL_table)) {
+  # Filter the mll_year_df for the current MLL
+  filtered_df <- mll_year_df[mll_year_df$MLL == repeated_MLL_table$MLL[i], ]
+  
+  # Get unique years associated with the current MLL
+  unique_years <- unique(unlist(strsplit(filtered_df$Years, ", ")))
+  
+  # Combine unique years into a single string
+  years_string <- paste(unique_years, collapse = ", ")
+  
+  # Assign the combined years to the Years column in mll_year_df
+  mll_year_df[mll_year_df$MLL == repeated_MLL_table$MLL[i], "Years"] <- years_string
+}
+
+
+mll_year_df <- mll_year_df[!(mll_year_df$YearCount == 1), ]
+
+#test
+mll_year_df [mll_year_df$MLL == 98, ]
+
+# Print the contingency table
+write.table(mll_year_df, file = "filtered_mll_years.csv", sep = ",", quote = FALSE, row.names = FALSE)
+```
 
 
 ##G/N and Fis calculation for Mll for sexual group
@@ -474,17 +577,146 @@ data_Genclone_sex <- as.genclone(data_GenInd_sex_MLL)
 
 data_sex_filtered <-filter_stats(data_Genclone_sex, distance = diss.dist, plot = TRUE, missing = "asis")
 
-#Arnaud-Haond et al. 2007, @bailleul2016rclone
-print(farthest_thresh <- cutoff_predictor(data_sex_filtered$farthest$THRESHOLDS))
 
-# “UPGMA ” algorithm.
-print(average_thresh  <- cutoff_predictor(data_sex_filtered$average$THRESHOLDS))
-
-# “nearest neighbor” algorithm.
-print(nearest_thresh  <- cutoff_predictor(data_sex_filtered$nearest$THRESHOLDS))
-
+rm (Ar_per_loc, asexual_lineages, data_Fstat, data_Genclone_clonal, data_Genclone_sex, data_GenInd_clonal_MLL,
+    data_GenInd_Cluster, data_GenInd_sex_MLL, fstat_basic_Temporel, genotype_data_2,mlg_counts, Obj_Ar, Poptmp , 
+    Table_PPR, Temp_Sample)
 
 ```
+
+
+
+
+----------------------------------------------------------------
+
+##  try NJ it with popper
+ 
+```{r}
+# Calculate distance matrix and build NJ tree
+
+dist <- diss.dist(data_GenInd)
+tree <- nj(dist)
+tree2 <- aboot(data_GenInd, dist = diss.dist , tree = "upgma", missing = "asis")
+
+# Create group information based on 'Profil' column
+groupInfo <- split(rownames(genotype_data), genotype_data$Reproduction)
+
+# Group the tree labels based on the group information
+tree <- groupOTU(tree2, groupInfo)
+
+
+# Create the ggtree plot with circular layout
+options(ignore.negative.edge=TRUE)
+p <- ggtree(tree, aes(color = group),layout = "circular")
+p
+
+# Create a dataframe for annotation
+dat1 <- data.frame(
+  ID = rownames(genotype_data),
+  lat = data$Lat,
+  long = data$Long,
+  MLL = data$Mll,
+  Group = genotype_data$Reproduction,
+  Year = data$Year
+)
+
+# Use %<+% of ggtree to add annotation dataset to the tree
+p1 <- p %<+% dat1
+
+# Initialize fill scale using new_scale_fill() from ggnewscale package
+p2 <- p +
+  geom_fruit(
+    data = dat1,
+    geom = geom_col,
+    mapping = aes(y = ID, x = Year, fill = MLL),  # Map 'Location' to fill
+    pwidth = 0.4,
+    offset = 0.01,
+    axis.params = list(
+      axis = "x",  # Add x-axis text
+      text.angle = -45,  # Adjust text angle
+      hjust = 0,  # Adjust horizontal position
+      text.size = 2.5,
+      line.size = 0.4,
+      line.color = "black"
+    ),
+    grid.params = list(color = "black", linetype = 5, size = 0.4, alpha = 0.8)  # Add grid lines
+  ) +
+  scale_shape_manual(
+    values = 1:length(unique(dat1$Location))  # Set shape values
+  ) +
+  theme(
+    #legend.position = c(1.15, 0.5),  # Adjust legend position
+    legend.background = element_rect(fill = NA),  # Set legend background
+    legend.title = element_text(size = 9),  # Adjust legend title size
+    legend.text = element_text(size = 7),  # Adjust legend text size
+    legend.spacing.y = unit(0.3, "cm")  # Adjust legend spacing (y orientation)
+  ) 
+   #+ geom_treescale(fontsize=2, linesize=0.3, x=-10, y=1000)
+
+p2
+
+# Filter the data to include only MLL values 6, 7, 8, and 10
+dat2 <- dat1[dat1$MLL %in% c(1:13), ]
+p1 <- p %<+% dat2
+
+ml_colors <- rainbow(length(unique(dat2$MLL)))
+
+# Use %<+% of ggtree to add annotation dataset to the tree
+p3 <- p +
+  geom_fruit(
+    data = dat2,
+    geom = geom_col,
+    mapping = aes(y = ID, x = Year, fill = factor(MLL)),  
+    pwidth = 0.4,
+    offset = 0.01,
+    axis.params = list(
+      axis = "x",  # Add x-axis text
+      text.angle = -45,  # Adjust text angle
+      hjust = 0,  # Adjust horizontal position
+      text.size = 2.5,
+      line.size = 0.4,
+      line.color = "black"
+    ),
+    grid.params = list(color = "black", linetype = 5, size = 0.4, alpha = 0.8)  # Add grid lines
+  ) +  scale_fill_manual(values = ml_colors) +  # Adjust low and high colors
+  theme(
+    #legend.position = c(1.15, 0.5),  # Adjust legend position
+    legend.background = element_rect(fill = NA),  # Set legend background
+    legend.title = element_text(size = 9),  # Adjust legend title size
+    legend.text = element_text(size = 7),  # Adjust legend text size
+    legend.spacing.y = unit(0.3, "cm")  # Adjust legend spacing (y orientation)
+  ) 
+   #+ geom_treescale(fontsize=2, linesize=0.3, x=-10, y=1000)
+
+
+
+p3
+
+
+
+
+
+
+
+
+
+# Modify legend titles
+p2 <- p2 +
+  labs(fill = "Location", color = "Profile") 
+  
+
+p2
+#ggsave("tree_plot2.png", p2, width = 17, height = 8, dpi = 600)  # Save the plot with desired dimensions
+
+```
+
+
+
+
+
+
+
+
 
 
 
@@ -524,84 +756,6 @@ legend.pie(-4.5, 41.4, labels = c("Asex","Sex"),
 ```
 ------------------------------------------------------------------------
 
-
-
-
-----------------------------------------------------------------
-
-#  try NJ it with popper
- 
-```{r}
-# Calculate distance matrix and build NJ tree
-
-dist <- diss.dist(data_GenInd)
-tree <- nj(dist)
-
-# Create group information based on 'Profil' column
-groupInfo <- split(data$Isolate, data$Profil)
-
-# Group the tree labels based on the group information
-tree <- groupOTU(tree, groupInfo)
-
-# Create a dataframe for annotation
-dat1 <- data.frame(
-  ID = data$Isolate,
-  lat = data$Lat,
-  long = data$Long,
-  Location = data$Site,
-  Group = data$Profil,
-  Year = data$Year
-)
-
-# Create the ggtree plot with circular layout
-options(ignore.negative.edge=TRUE)
-p <- ggtree(tree, aes(color = group))
-p
-
-# Use %<+% of ggtree to add annotation dataset to the tree
-p1 <- p %<+% dat1
-
-# Initialize fill scale using new_scale_fill() from ggnewscale package
-p2 <- p +
-  geom_fruit(
-    data = dat1,
-    geom = geom_col,
-    mapping = aes(y = ID, x = Year, fill = Location),  # Map 'Location' to fill
-    pwidth = 0.4,
-    offset = 0.01,
-    axis.params = list(
-      axis = "x",  # Add x-axis text
-      text.angle = -45,  # Adjust text angle
-      hjust = 0,  # Adjust horizontal position
-      text.size = 2.5,
-      line.size = 0.4,
-      line.color = "black"
-    ),
-    grid.params = list(color = "black", linetype = 5, size = 0.4, alpha = 0.8)  # Add grid lines
-  ) +
-  scale_shape_manual(
-    values = 1:length(unique(dat1$Location))  # Set shape values
-  ) +
-  theme(
-    #legend.position = c(1.15, 0.5),  # Adjust legend position
-    legend.background = element_rect(fill = NA),  # Set legend background
-    legend.title = element_text(size = 9),  # Adjust legend title size
-    legend.text = element_text(size = 7),  # Adjust legend text size
-    legend.spacing.y = unit(0.3, "cm")  # Adjust legend spacing (y orientation)
-  ) 
-   #+ geom_treescale(fontsize=2, linesize=0.3, x=-10, y=1000)
-
-p2
-# Modify legend titles
-p2 <- p2 +
-  labs(fill = "Location", color = "Profile") 
-  
-
-p2
-#ggsave("tree_plot2.png", p2, width = 17, height = 8, dpi = 600)  # Save the plot with desired dimensions
-
-```
-----------------------------------------------------------------
 
 
 

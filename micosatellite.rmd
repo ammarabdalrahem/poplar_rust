@@ -625,7 +625,89 @@ genotype_data[is.na(genotype_data$profile), "profile"] <- "sex"
 ```
 
 
+##G/N and Fis calculation for new profile groups
 
+```{r}
+# Convert to genind object
+final_GenInd <- df2genind(
+  X = genotype_mlp,   #data.frame containing allele data only 
+  sep = NULL,
+  ncode = 3,           #an optional integer giving the number of characters used for coding one genotype at one locus.
+  ind.names = rownames(genotype_mlp),  # individuals names
+  loc.names = colnames(genotype_mlp),  # markers names
+  pop = genotype_data$profile,                       # giving the population of each individual
+  NA.char = "999",                      # string corresponding to missing allele 999 or 999999
+  ploidy = 2,
+  type = "codom",                       #codom' stands for 'codominant' (e.g. microstallites, allozymes)
+  strata = NULL,
+  hierarchy = NULL,
+  check.ploidy = getOption("adegenet.check.ploidy")
+)
+
+
+Nb_Pop = length(levels(final_GenInd@pop))
+
+# Attribution des différents vecteurs que l'on souhaite calculer
+N <- vector(mode ="integer", length = Nb_Pop)
+GsurN<- vector(mode ="numeric", length = Nb_Pop)
+Ho <- vector(mode ="numeric", length = Nb_Pop)
+Hs <- vector(mode ="numeric", length = Nb_Pop)
+Fis <- vector(mode ="numeric", length = Nb_Pop)
+rbarD<- vector(mode ="numeric", length = Nb_Pop)
+
+Pop <- levels(final_GenInd$pop)
+
+## Utilisation de Poppr pour récupérer les premiers indices N, G/N et rbarD
+Table_PPR <- poppr(final_GenInd) # marche bien
+
+rbarD <- Table_PPR$rbarD[1:Nb_Pop]
+N <- Table_PPR$N[1:Nb_Pop]
+GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
+
+#calcul de la proba de DL
+ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
+for (i in 1:Nb_Pop) {
+  i=1
+  Temp_Sample <- popsub(final_GenInd, Table_PPR$Pop[i])
+  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] # Attention c'est assez long à tourner 
+}
+
+
+## Utilisation de Fstat pour calculer les autres indices HO, HE, Fis et Ar
+
+data_Fstat <-genind2hierfstat(final_GenInd)
+
+# Boucles qui permet de calculer les indices souhaités pour chaque population (et pas la globalité)
+a =0
+for (i in levels(data_Fstat$pop) ){
+  Poptmp <- final_GenInd[which(final_GenInd$pop==i),]
+  #Poptmp  <-genind2hierfstat(Poptmp)
+  fstat_basic_Temporel <- basic.stats(Poptmp)
+  a = a+1
+  Ho[a]<-fstat_basic_Temporel$overall["Ho"]  
+  Hs[a]<-fstat_basic_Temporel$overall["Hs"]  
+  Fis[a]<-fstat_basic_Temporel$overall["Fis"] 
+}
+
+# calcul de la richess allélique
+Obj_Ar <- allelic.richness(data_Fstat[which(data_Fstat[,"pop"]!="NA"),])
+Ar_per_loc <- Obj_Ar$Ar
+#Ar_per_loc <- Ar_per_loc[c(1:2, 4:13, 15:23),] # pour sortir les locus 100 et 26 qui sont absents de certaines pops
+Ar<- vector(mode ="numeric", length = Nb_Pop)
+for (i in 1:Nb_Pop){ 
+  Ar[i] = mean(Ar_per_loc[,i])
+}
+
+## Mise en forme du tableau final
+Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis, rbarD)
+colnames(Tab_Indices_per_pop) <- Pop
+Tab_Indices_per_pop <- t(Tab_Indices_per_pop)
+kable(Tab_Indices_per_pop, digits = 3)
+
+
+rm (Ar_per_loc, data_Fstat, fstat_basic_Temporel, Obj_Ar, Poptmp , Table_PPR, Temp_Sample)
+
+```
 
 
 ##  try NJ it with popper

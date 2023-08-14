@@ -97,7 +97,8 @@ data_GenInd <- df2genind(
 data_Genclone <- as.genclone(data_GenInd)
 
 #Define MLG according threshold = 0
-mlg_assignments <- mlg.filter(data_Genclone, threshold = 0, distance = "diss.dist", threads = 1L,missing = "asis") #he "asis" option is used to indicate that missing data should be treated "as is," meaning that missing values will be retained as NA in the distance matrix.
+mlg_assignments <- mlg.filter(data_Genclone, threshold = 0, distance = "diss.dist", threads = 1L,missing = "asis") 
+#he "asis" option is used to indicate that missing data should be treated "as is," meaning that missing values will be retained as NA in the distance matrix.
 
 #add MLG result to the table
 genotype_data$MLG <- mlg_assignments
@@ -194,6 +195,8 @@ genotype_data$Cluster <- ifelse(posterior_data[, 1] >= 0.8, "Cluster 1", #80%
 
 #genotype_data <- subset(genotype_data, Cluster %in% c("Cluster 1", "Cluster 2"))
 
+#remove 
+genotype_data$cluster = NULL
 
 rm(certain_data, melted_data,dapc1,uncertain_data ,posterior_data, grp) 
 
@@ -209,19 +212,19 @@ rm(certain_data, melted_data,dapc1,uncertain_data ,posterior_data, grp)
 
 # Select columns with "Mlp" in the name and the first column as isolate id
 genotype_cols <- c(grep("Mlp", names(genotype_data), value = TRUE))
-genotype_data_2 <- data[, genotype_cols]
+genotype_mlp <- data[, genotype_cols]
 
 #make isolate id as column names 
-rownames(genotype_data_2) <- rownames(genotype_data)
+rownames(genotype_mlp) <- rownames(genotype_data)
 
 
 # Convert to genind object
 data_GenInd_Cluster <- df2genind(
-  X = genotype_data_2,   #data.frame containing allele data only 
+  X = genotype_mlp,   #data.frame containing allele data only 
   sep = NULL,
   ncode = 3,           #an optional integer giving the number of characters used for coding one genotype at one locus.
-  ind.names = rownames(genotype_data_2),  # individuals names
-  loc.names = colnames(genotype_data_2),  # markers names
+  ind.names = rownames(genotype_mlp),  # individuals names
+  loc.names = colnames(genotype_mlp),  # markers names
   pop = genotype_data$Cluster,                       # giving the population of each individual
   NA.char = "999",                      # string corresponding to missing allele 999 or 999999
   ploidy = 2,
@@ -308,7 +311,7 @@ for (i in 1:nrow(Tab_Indices_per_pop)) {
 
 ```
 
-##G/N and Fis calculation for Mll for asexual group
+##G/N and Fis calculation for Mll for clonal group
 
 ```{r}
 #create table of genotype
@@ -413,6 +416,54 @@ asexual_lineages <- merge(mlg_counts,Tab_Indices_per_mll,by="row.names",all.x=TR
 
 
 ```
+
+
+##G/N and Fis calculation for Mll for sexual group
+
+```{r}
+#create table of genotype
+
+# Select columns with "Mlp" in the name and the first column as isolate id
+
+sex_data <- genotype_data[genotype_data$Reproduction == "sex", ]
+
+# Select columns with "Mlp" in the name and the first column as isolate id
+genotype_cols_sex <- c(grep("Mlp", names(sex_data), value = TRUE))
+genotype_sex <- sex_data[, genotype_cols_sex]
+
+#make isolate id as column names 
+rownames(genotype_sex) <- rownames(sex_data)
+
+
+
+# Convert to genind object
+data_GenInd_sex_MLL <- df2genind(
+  X = genotype_sex,   #data.frame containing allele data only 
+  sep = NULL,
+  ncode = 3,           #an optional integer giving the number of characters used for coding one genotype at one locus.
+  ind.names = rownames(genotype_sex),  # individuals names
+  loc.names = colnames(genotype_sex),  # markers names
+  pop = NULL,                       # giving the population of each individual
+  NA.char = "999",                      # string corresponding to missing allele 999 or 999999
+  ploidy = 2,
+  type = "codom",                       #codom' stands for 'codominant' (e.g. microstallites, allozymes)
+  strata = NULL,
+  hierarchy = NULL,
+  check.ploidy = getOption("adegenet.check.ploidy")
+)
+
+
+data_Genclone_sex <- as.genclone(data_GenInd_sex_MLL)
+
+data_sex_filtered <-filter_stats(data_Genclone_sex, distance = diss.dist, plot = TRUE, missing = "asis")
+
+
+rm (Ar_per_loc, asexual_lineages, data_Fstat, data_Genclone_clonal, data_Genclone_sex, data_GenInd_clonal_MLL,
+    data_GenInd_Cluster, data_GenInd_sex_MLL, fstat_basic_Temporel,mlg_counts, Obj_Ar, Poptmp , 
+    Table_PPR, Temp_Sample)
+
+```
+
 
 
 ##check the new MLL anf old Mll for asexual
@@ -527,43 +578,67 @@ for (i in 1:nrow(repeated_MLL_table)) {
   mll_year_df[mll_year_df$MLL == repeated_MLL_table$MLL[i], "Years"] <- years_string
 }
 
-
+#remove all non repeated mll  
 mll_year_df <- mll_year_df[!(mll_year_df$YearCount == 1), ]
 
 #test
 mll_year_df [mll_year_df$MLL == 98, ]
+
 
 # Print the contingency table
 write.table(mll_year_df, file = "filtered_mll_years.csv", sep = ",", quote = FALSE, row.names = FALSE)
 ```
 
 
-##G/N and Fis calculation for Mll for sexual group
+##corss validation to define Profile
 
 ```{r}
-#create table of genotype
+for (i in 1:nrow(mll_year_df)) {
+  if (mll_year_df$YearCount[i] >= 3) {
+    mll <- mll_year_df[mll_year_df$MLL == mll_year_df$MLL[i], ]
+    years_string <- mll$Years
+    years <- unlist(strsplit(years_string, ", "))
+    num_years <- length(unique(years))  # Count unique years
+    
+    if (num_years >= 2) {
+      mll_year_df$profile[i] <- "clonal"
+    } else {
+      mll_year_df$profile[i] <- "sex"
+    }
+  } else {
+    mll_year_df$profile[i] <- "sex"
+  }
+}
 
-# Select columns with "Mlp" in the name and the first column as isolate id
-
-sex_data <- genotype_data[genotype_data$Reproduction == "sex", ]
-
-# Select columns with "Mlp" in the name and the first column as isolate id
-genotype_cols_sex <- c(grep("Mlp", names(sex_data), value = TRUE))
-genotype_sex <- sex_data[, genotype_cols_sex]
-
-#make isolate id as column names 
-rownames(genotype_sex) <- rownames(sex_data)
 
 
+for (i in 1:nrow(mll_year_df)) {
+  mll_value <- mll_year_df$MLL[i]
+  profile_value <- mll_year_df$profile[i]
+  
+  genotype_data$profile[genotype_data$MLL_poppr == mll_value] <- profile_value
+}
 
+genotype_data[is.na(genotype_data$profile), "profile"] <- "sex"
+
+
+```
+
+
+
+
+
+##  try NJ it with popper
+ 
+```{r}
 # Convert to genind object
-data_GenInd_sex_MLL <- df2genind(
-  X = genotype_sex,   #data.frame containing allele data only 
+final_GenInd <- df2genind(
+  X = genotype_mlp,   #data.frame containing allele data only 
   sep = NULL,
   ncode = 3,           #an optional integer giving the number of characters used for coding one genotype at one locus.
-  ind.names = rownames(genotype_sex),  # individuals names
-  loc.names = colnames(genotype_sex),  # markers names
-  pop = NULL,                       # giving the population of each individual
+  ind.names = rownames(genotype_mlp),  # individuals names
+  loc.names = colnames(genotype_mlp),  # markers names
+  pop = genotype_data$MLL_poppr,                       # giving the population of each individual
   NA.char = "999",                      # string corresponding to missing allele 999 or 999999
   ploidy = 2,
   type = "codom",                       #codom' stands for 'codominant' (e.g. microstallites, allozymes)
@@ -573,33 +648,14 @@ data_GenInd_sex_MLL <- df2genind(
 )
 
 
-data_Genclone_sex <- as.genclone(data_GenInd_sex_MLL)
-
-data_sex_filtered <-filter_stats(data_Genclone_sex, distance = diss.dist, plot = TRUE, missing = "asis")
-
-
-rm (Ar_per_loc, asexual_lineages, data_Fstat, data_Genclone_clonal, data_Genclone_sex, data_GenInd_clonal_MLL,
-    data_GenInd_Cluster, data_GenInd_sex_MLL, fstat_basic_Temporel, genotype_data_2,mlg_counts, Obj_Ar, Poptmp , 
-    Table_PPR, Temp_Sample)
-
-```
-
-
-
-
-----------------------------------------------------------------
-
-##  try NJ it with popper
- 
-```{r}
 # Calculate distance matrix and build NJ tree
 
-dist <- diss.dist(data_GenInd)
+dist <- diss.dist(final_GenInd)
 tree <- nj(dist)
-tree2 <- aboot(data_GenInd, dist = diss.dist , tree = "upgma", missing = "asis")
+tree2 <- aboot(final_GenInd, dist = diss.dist , tree = "upgma", missing = "asis")
 
 # Create group information based on 'Profil' column
-groupInfo <- split(rownames(genotype_data), genotype_data$Reproduction)
+groupInfo <- split(rownames(genotype_data), genotype_data$profile)
 
 # Group the tree labels based on the group information
 tree <- groupOTU(tree2, groupInfo)
@@ -615,9 +671,11 @@ dat1 <- data.frame(
   ID = rownames(genotype_data),
   lat = data$Lat,
   long = data$Long,
-  MLL = data$Mll,
-  Group = genotype_data$Reproduction,
-  Year = data$Year
+  MLL = genotype_data$MLL_poppr,
+  Group = genotype_data$profile,
+  Year = as.factor(data$Year),
+  Location = data$Site
+
 )
 
 # Use %<+% of ggtree to add annotation dataset to the tree
@@ -628,7 +686,7 @@ p2 <- p +
   geom_fruit(
     data = dat1,
     geom = geom_col,
-    mapping = aes(y = ID, x = Year, fill = MLL),  # Map 'Location' to fill
+    mapping = aes(y = ID, x = Year, fill = Location),  # Map 'Location' to fill
     pwidth = 0.4,
     offset = 0.01,
     axis.params = list(
@@ -653,60 +711,15 @@ p2 <- p +
   ) 
    #+ geom_treescale(fontsize=2, linesize=0.3, x=-10, y=1000)
 
-p2
-
-# Filter the data to include only MLL values 6, 7, 8, and 10
-dat2 <- dat1[dat1$MLL %in% c(1:13), ]
-p1 <- p %<+% dat2
-
-ml_colors <- rainbow(length(unique(dat2$MLL)))
-
-# Use %<+% of ggtree to add annotation dataset to the tree
-p3 <- p +
-  geom_fruit(
-    data = dat2,
-    geom = geom_col,
-    mapping = aes(y = ID, x = Year, fill = factor(MLL)),  
-    pwidth = 0.4,
-    offset = 0.01,
-    axis.params = list(
-      axis = "x",  # Add x-axis text
-      text.angle = -45,  # Adjust text angle
-      hjust = 0,  # Adjust horizontal position
-      text.size = 2.5,
-      line.size = 0.4,
-      line.color = "black"
-    ),
-    grid.params = list(color = "black", linetype = 5, size = 0.4, alpha = 0.8)  # Add grid lines
-  ) +  scale_fill_manual(values = ml_colors) +  # Adjust low and high colors
-  theme(
-    #legend.position = c(1.15, 0.5),  # Adjust legend position
-    legend.background = element_rect(fill = NA),  # Set legend background
-    legend.title = element_text(size = 9),  # Adjust legend title size
-    legend.text = element_text(size = 7),  # Adjust legend text size
-    legend.spacing.y = unit(0.3, "cm")  # Adjust legend spacing (y orientation)
-  ) 
-   #+ geom_treescale(fontsize=2, linesize=0.3, x=-10, y=1000)
-
-
-
-p3
-
-
-
-
-
-
-
-
-
 # Modify legend titles
 p2 <- p2 +
   labs(fill = "Location", color = "Profile") 
-  
 
 p2
+
 #ggsave("tree_plot2.png", p2, width = 17, height = 8, dpi = 600)  # Save the plot with desired dimensions
+
+
 
 ```
 
@@ -726,11 +739,18 @@ just to look at where each population is located
 
 ```{r}
 # summarize data by population and location
-pop_data <- data %>%
-  group_by(Pop, Long, Lat,Profil) %>%
-  summarize(n = n()) %>%
+
+genotype_data$Pop <- data$Pop
+genotype_data$Long <- data$Long
+genotype_data$Lat <- data$Lat
+  
+
+pop_data <- genotype_data %>%
+  group_by(Pop, Long, Lat, profile) %>%
+  summarize(n = n(), .groups = "drop") %>%   # Specify .groups = "drop" to remove grouping
   mutate(percent = n / sum(n)) %>%
-  select(Pop, Long, Lat,Profil, n, percent)
+  select(Pop, Long, Lat, profile, n, percent)
+
 
 #draw map Representative the popular individual across France map within reproductive mode
 # The area of the France Region;
@@ -738,23 +758,31 @@ xlim <- c(-4.3,9.1)
 ylim <- c(41, 51)
 
 # Creates an xyz object for use with the function draw.pie
-xyz <- make.xyz(pop_data$Long, pop_data$Lat, pop_data$percent, pop_data$Profil)
+xyz <- make.xyz(pop_data$Long, pop_data$Lat, pop_data$percent, pop_data$profile)
 
-# Colors used
-my_colors <- c("#EDF060", "#F34213")
-transparent_colors <- adjustcolor(my_colors, alpha.f = 0.5)
+# Create a color palette based on the unique profile values
+unique_profiles <- unique(pop_data$profile)
+num_profiles <- length(unique_profiles)
+my_colors <- viridis(num_profiles)
+
+# Create a named vector to map profiles to colors
+#profile_color_mapping <- setNames(my_colors, unique_profiles)
+
+# Create a named vector for profile colors
+profile_color_mapping <- c("clonal" = "#FFEB00",  "sex" = "#FA1421"  )
+transparent_colors <- adjustcolor(profile_color_mapping, alpha.f = 0.8)
+
 
 # The plot of the pie chart above the map
 par(mai = c(0.5, 0.5, 0.35, 0.2), omi = c(0.25, 0.5, 0, 0),
     mgp = c(2.5, 0.5, 0), family = "Arial")
-basemap(xlim =  c(-4.3,9.1), ylim =  c(41, 51), bg = "white",
+basemap(xlim = c(-4.3, 9.1), ylim = c(41, 51), bg = "white",
         main = "Distribution of population of poplar rust in France")
-map("france", fill=FALSE, col="light blue", xlim = xlim, ylim = ylim, add = TRUE)
-draw.pie(xyz$x, xyz$y, xyz$z, radius = 0.3, col = transparent_colors)
-legend.pie(-4.5, 41.4, labels = c("Asex","Sex"), 
-           radius = 0.3, bty = "n", col = my_colors, cex = 1, label.dist = 1.5)
+map("france", fill = FALSE, col = "light blue", xlim = xlim, ylim = ylim, add = TRUE)
+draw.pie(xyz$x, xyz$y, xyz$z, radius = 0.3, col =transparent_colors)
+legend.pie(-4.5, 41.4, labels = c("clonal", "sex"  ),
+           radius = 0.3, bty = "n", col = profile_color_mapping, cex = 1, label.dist = 1.5)
 ```
-------------------------------------------------------------------------
 
 
 

@@ -1,4 +1,4 @@
----
+ ---
 title: "population genetics analysis Mlp"
 output: html_notebook
 ---
@@ -140,6 +140,20 @@ rm(data_Genclone, data_filtered)
 ## Identification the individuals profile(sex/asex) (two clusters)
 
 ```{r}
+
+#create table of genotype
+
+# Select columns with "Mlp" in the name and the first column as isolate id
+genotype_cols <- c(grep("Mlp", names(genotype_data), value = TRUE))
+genotype_mlp <- data[, genotype_cols]
+
+#make isolate id as column names 
+rownames(genotype_mlp) <- rownames(genotype_data)
+
+
+#choose number of cluster depending on silhouette algorithm combination with our pervoius knpwlage it will be K=2
+
+fviz_nbclust(genotype_mlp, kmeans, method = "silhouette")
 # First identification by cluster
 grp <- find.clusters(data_GenInd, method = "kmeans", stat = "BIC", n.pca= 90 , n.clust= 2, n.iter=100000, n.start=100)
 cluster_assignments <- grp$grp
@@ -208,15 +222,6 @@ rm(certain_data, melted_data,dapc1,uncertain_data ,posterior_data, grp)
 ##G/N and Fis calculation for cluster groups
 
 ```{r}
-#create table of genotype
-
-# Select columns with "Mlp" in the name and the first column as isolate id
-genotype_cols <- c(grep("Mlp", names(genotype_data), value = TRUE))
-genotype_mlp <- data[, genotype_cols]
-
-#make isolate id as column names 
-rownames(genotype_mlp) <- rownames(genotype_data)
-
 
 # Convert to genind object
 data_GenInd_Cluster <- df2genind(
@@ -745,7 +750,21 @@ tree <- groupOTU(tree2, groupInfo)
 
 # Create the ggtree plot with circular layout
 options(ignore.negative.edge=TRUE)
-p <- ggtree(tree, aes(color = group),layout = "circular")
+p <- ggtree(tree, aes(color = group), layout = "circular") +
+  labs(color = "Profile") +
+  # ... other plot customization here ...
+  theme(
+    panel.background = element_rect(fill='transparent'), # transparent panel bg
+    plot.background = element_rect(fill='transparent', color=NA), # transparent plot bg
+    panel.grid.major = element_blank(), # remove major gridlines
+    panel.grid.minor = element_blank(), # remove minor gridlines
+    legend.background = element_rect(fill='transparent'), # transparent legend bg
+    legend.box.background = element_rect(fill='transparent'), # transparent legend panel
+    legend.text = element_text(color = 'black', face = 'bold', size = 13), # set legend text color and size
+    legend.title = element_text(color = 'black', face = 'bold', size = 15) # set legend title color and size
+
+  )
+
 p
 
 # Create a dataframe for annotation
@@ -761,7 +780,7 @@ dat1 <- data.frame(
 )
 
 # Use %<+% of ggtree to add annotation dataset to the tree
-p1 <- p %<+% dat1
+p1 <- p  %<+% dat1
 
 # Initialize fill scale using new_scale_fill() from ggnewscale package
 p2 <- p +
@@ -789,7 +808,7 @@ p2 <- p +
     legend.background = element_rect(fill = NA),  # Set legend background
     legend.title = element_text(size = 9),  # Adjust legend title size
     legend.text = element_text(size = 7),  # Adjust legend text size
-    legend.spacing.y = unit(0.3, "cm")  # Adjust legend spacing (y orientation)
+    legend.spacing.y = unit(0.3, "cm"),  # Adjust legend spacing (y orientation)
   ) 
    #+ geom_treescale(fontsize=2, linesize=0.3, x=-10, y=1000)
 
@@ -799,8 +818,7 @@ p2 <- p2 +
 
 p2
 
-#ggsave("tree_plot2.png", p2, width = 17, height = 8, dpi = 600)  # Save the plot with desired dimensions
-
+ggsave("tree_plot2.png", p, width = 17, height = 8, dpi = 600, bg = "transparent")  # Save the plot with desired dimensions
 
 
 ```
@@ -856,14 +874,23 @@ transparent_colors <- adjustcolor(profile_color_mapping, alpha.f = 0.8)
 
 
 # The plot of the pie chart above the map
+# Start the png device
+
+png(filename = "map_output.png", width = 1000, height = 800, bg = "transparent")
+
 par(mai = c(0.5, 0.5, 0.35, 0.2), omi = c(0.25, 0.5, 0, 0),
-    mgp = c(2.5, 0.5, 0), family = "Arial")
-basemap(xlim = c(-4.3, 9.1), ylim = c(41, 51), bg = "white",
-        main = "Distribution of population of poplar rust in France")
-map("france", fill = FALSE, col = "light blue", xlim = xlim, ylim = ylim, add = TRUE)
-draw.pie(xyz$x, xyz$y, xyz$z, radius = 0.3, col =transparent_colors)
-legend.pie(-4.5, 41.4, labels = c("clonal", "sex"  ),
-           radius = 0.3, bty = "n", col = profile_color_mapping, cex = 1, label.dist = 1.5)
+    mgp = c(2.5, 0.5, 0), family = "Arial",col = "yellow")
+basemap(xlim = c(-4.3, 9.1), ylim = c(41, 51), bg = "transparent",
+        main = "Distribution of population of poplar rust in France", col.main="white", cex.main = 1.6)
+map("france", fill = FALSE, col = "yellow", xlim = xlim, ylim = ylim, add = TRUE)
+final_map <- draw.pie(xyz$x, xyz$y, xyz$z, radius = 0.3, col = transparent_colors)
+
+legend(-4.5, 45, legend = c("Clonal", "Sex"), fill = transparent_colors, bty = "n", cex = 1.5, ncol = 1, text.col = "white")
+
+
+dev.off()
+
+
 ```
 
 

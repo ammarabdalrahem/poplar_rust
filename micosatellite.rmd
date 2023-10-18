@@ -3,7 +3,7 @@ title: "population genetics analysis Mlp"
 output: html_notebook
 ---
 
-## Author: Ammar Abdalrahem
+## Author: Ammar Abdalrahem & Fab
 
 ------------------------------------------------------------------------
 

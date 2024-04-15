@@ -3,7 +3,7 @@ title: "population genetics analysis Mlp"
 output: html_notebook
 ---
 
-## Author: Ammar Abdalrahem & Fab
+## Author: Ammar Abdalrahem
 
 ------------------------------------------------------------------------
 
@@ -15,7 +15,8 @@ Remember to re-run this code every time you re-open this R Notebook.
 #Code to install packages if necessary, and read them with library function
 
 required_packages <- c("knitr","ggplot2","readxl","tidyverse","genepop","hierfstat","here","mapdata",
-                       "mapplots","data.table","grDevices","colorspace","adegenet","poppr","pegas","ape","ade4","remotes","ggtree","ggtreeExtra","viridis","factoextra")
+                       "mapplots","data.table","grDevices","colorspace","adegenet","poppr","pegas","ape",
+                       "ade4","remotes","ggtree","ggtreeExtra","viridis","factoextra","openxlsx")
 for (package in required_packages) {
   if (package %in% row.names(installed.packages())) {
     library(package, character.only = TRUE)
@@ -44,7 +45,7 @@ getwd()
 
 
 # import the data within specified sheet
-data <- read_excel("SexASex4Ammar+departements.xlsx", 
+data <- read_excel("SexAsex4Ammar+departements_trail.xlsx", 
                   sheet = "Ammar")
 
 #covert data to data frame
@@ -67,8 +68,7 @@ head(data)
 
 ```{r}
 #create table of genotype
-
-# Select columns with "Mlp" in the name and the first column as isolate id
+#by select columns with "Mlp" in the name and the first column as isolate id
 genotype_cols <- c("Isolate", grep("Mlp", names(data), value = TRUE))
 genotype_data <- data[, genotype_cols]
 
@@ -78,7 +78,7 @@ rownames(genotype_data) <- genotype_data[,1]
 genotype_data$Isolate = NULL
 
 
-# Convert to genind object
+# Convert data to genind object
 data_GenInd <- df2genind(
   X = genotype_data,   #data.frame containing allele data only 
   sep = NULL,
@@ -94,6 +94,7 @@ data_GenInd <- df2genind(
   check.ploidy = getOption("adegenet.check.ploidy")
 )
 
+# Convert data to genclone object
 data_Genclone <- as.genclone(data_GenInd)
 
 #Define MLG according threshold = 0
@@ -105,10 +106,12 @@ genotype_data$MLG <- mlg_assignments
 
 #Define the MLL 
 #Choosing a threshold
-#After you have chosen a genetic distance and a filtering algorithm
-#choose threshold to represent the minimum genetic distance at which two individuals would be considered from different ASex lineages.
+#After have chosen a genetic distance and a filtering algorithm
+#choose threshold to represent the minimum genetic distance at which two individuals would be considered from different Asex lineages.
 
-data_filtered <-filter_stats(data_Genclone, distance = diss.dist, plot = TRUE, missing = "asis")
+data_filtered <-filter_stats(data_Genclone, distance = diss.dist, plot = TRUE, missing = "asis",hist= "sturges")
+
+
 # “farthest neighbor” algorithm.
 #Arnaud-Haond et al. 2007, @bailleul2016rclone
 print(farthest_thresh <- cutoff_predictor(data_filtered$farthest$THRESHOLDS))
@@ -126,11 +129,53 @@ mll_assignments<- mlg.filter(data_Genclone, threshold = average_thresh , algorit
 
 genotype_data$MLL_poppr <- mll_assignments
 
+
 #clean
-rm(data_Genclone, data_filtered) 
+#rm(data_Genclone, data_filtered) 
 
 
 #write.csv2(genotype_data, "data_new.csv")
+
+```
+
+#creat data for ClonEstiMate
+
+```{r}
+#create table of ClonEstiMate software by select columns with "Mlp" and Year
+ClonEstiMate_data <- c("Year", grep("Mlp", names(data), value = TRUE))
+ClonEstiMate_data <- data[, ClonEstiMate_data]
+
+#Keep 2009, and 2011 only and remove the rest
+ClonEstiMate_data <- ClonEstiMate_data[ClonEstiMate_data$Year %in% c("2009", "2011"), ]
+
+#add pop col
+ClonEstiMate_data <- ClonEstiMate_data %>% 
+  mutate(pop = if_else(Year == 2009, "France", "France"))
+
+#Change pop col order
+ClonEstiMate_data <- ClonEstiMate_data %>% relocate(pop)
+
+
+
+#separate each 6 digits of each loci into two cols
+#1.Define the column names
+mlp_columns <- names(ClonEstiMate_data)[grepl("^Mlp_", names(ClonEstiMate_data))]
+
+#2.Loop over each MLP column 
+for(col in mlp_columns) {
+  # Create new column names
+  new_cols <- paste0(col, "_part", 1:2)
+  
+  ClonEstiMate_data <- ClonEstiMate_data %>%
+    mutate(
+      !!new_cols[1] := as.integer(substr(!!sym(col), 1, 3)),
+      !!new_cols[2] := as.integer(substr(!!sym(col), 4, 6))
+    ) %>%
+    select(-!!sym(col))  # Remove the original column
+}
+
+write.table(ClonEstiMate_data, "ClonEstiMate_data.txt", sep = "\t",quote = FALSE, row.names = FALSE, col.names =TRUE)
+
 
 ```
 
@@ -138,7 +183,7 @@ rm(data_Genclone, data_filtered)
 
 
 
-## Identification the individuals profile(Sex/asex) (two clusters)
+## Identification the individuals profile(sex/asex) (two clusters)
 
 ```{r}
 
@@ -152,11 +197,6 @@ genotype_mlp <- data[, genotype_cols]
 rownames(genotype_mlp) <- rownames(genotype_data)
 
 
-#choose number of cluster depending on silhouette algorithm combination with our pervoius knpwlage it will be K=2
-
-#fviz_nbclust(genotype_mlp, kmeans, method = "silhouette")
-
-
 # First identification by cluster
 grp <- find.clusters(data_GenInd, method = "kmeans", stat = "BIC", n.pca= 90 , n.clust= 2, n.iter=100000, n.start=100)
 cluster_assignments <- grp$grp
@@ -167,7 +207,7 @@ dapc1 <- dapc(data_GenInd, grp$grp, n.pca= 90 , n.clust=2, n.da = 100)
 
 # results visualization  
 scatter(dapc1)
-compoplot(dapc1, posi="bottomright", txt.leg=paste("Cluster", 1:2), lab="", ncol=1, xlab="individuals")
+compoplot(dapc1, txt.leg=paste("Cluster", 1:2), lab="", ncol=1, xlab="individuals")
 
 #found special individual 
 # Convert the posterior probabilities to a data frame
@@ -199,11 +239,7 @@ uncertain_data <- data[!(posterior_data[, 1] >= 0.8 | posterior_data[, 2] >= 0.8
 
 genotype_data$Cluster <- ifelse(posterior_data[, 1] >= 0.8, "Cluster 1", #80% 
                        ifelse(posterior_data[, 2] >= 0.8, "Cluster 2", 
-                              ifelse(posterior_data[, 1] > posterior_data[, 2], 
-                                     "Cluster 1 (Closer to Cluster 2)", 
-                                     ifelse(posterior_data[, 2] > posterior_data[, 1], 
-                                            "Cluster 2 (Closer to Cluster 1)", 
-                                            "None Determined"))))
+                                            "None Determined"))
 
 
 
@@ -320,7 +356,7 @@ for (i in 1:nrow(Tab_Indices_per_pop)) {
 
 
 
-##G/N and Fis calculation for Mll for Asex group
+##G/N and Fis calculation for Mll for Asex group (as Reproduction)
 
 ```{r}
 #create table of genotype
@@ -512,6 +548,7 @@ write.table(high_values_table, file = "contingency_table_Sex.csv", sep = ",", qu
 
 
 ```
+
 
 
 ## create table of repeated Mll diffrent years
@@ -731,6 +768,242 @@ rm (Ar_per_loc, data_Fstat, fstat_basic_Temporel, Obj_Ar, Poptmp , Table_PPR, Te
 
 ```
 
+
+
+##G/N and Fis calculation for Mll for Asex group (as Profile)
+
+```{r}
+#create table of genotype
+
+# Select columns with "Mlp" in the name and the first column as isolate id
+
+ASex_data <- genotype_data[genotype_data$profile == "Asex", ]
+
+# Select columns with "Mlp" in the name and the first column as isolate id
+genotype_cols_ASex <- c(grep("Mlp", names(ASex_data), value = TRUE))
+genotype_ASex <- ASex_data[, genotype_cols_ASex]
+
+#make isolate id as column names 
+rownames(genotype_ASex) <- rownames(ASex_data)
+
+
+
+# Convert to genind object
+data_GenInd_ASex_MLL <- df2genind(
+  X = genotype_ASex,   #data.frame containing allele data only 
+  sep = NULL,
+  ncode = 3,           #an optional integer giving the number of characters used for coding one genotype at one locus.
+  ind.names = rownames(genotype_ASex),  # individuals names
+  loc.names = colnames(genotype_ASex),  # markers names
+  pop = ASex_data$MLL_poppr,                       # giving the population of each individual
+  NA.char = "999",                      # string corresponding to missing allele 999 or 999999
+  ploidy = 2,
+  type = "codom",                       #codom' stands for 'codominant' (e.g. microstallites, allozymes)
+  strata = NULL,
+  hierarchy = NULL,
+  check.ploidy = getOption("adegenet.check.ploidy")
+)
+data_Genclone_ASex <- as.genclone(data_GenInd_ASex_MLL)
+
+data_Sex_filtered <-filter_stats(data_Genclone_ASex, distance = diss.dist, plot = TRUE, missing = "asis")
+
+Nb_Pop = length(levels(data_GenInd_ASex_MLL@pop))
+
+# Attribution des différents vecteurs que l'on souhaite calculer
+N <- vector(mode ="integer", length = Nb_Pop)
+GsurN<- vector(mode ="numeric", length = Nb_Pop)
+Ho <- vector(mode ="numeric", length = Nb_Pop)
+Hs <- vector(mode ="numeric", length = Nb_Pop)
+Fis <- vector(mode ="numeric", length = Nb_Pop)
+rbarD<- vector(mode ="numeric", length = Nb_Pop)
+
+Pop <- levels(data_GenInd_ASex_MLL$pop)
+
+## Utilisation de Poppr pour récupérer les premiers indices N, G/N et rbarD
+Table_PPR <- poppr(data_GenInd_ASex_MLL) # marche bien
+
+rbarD <- Table_PPR$rbarD[1:Nb_Pop]
+N <- Table_PPR$N[1:Nb_Pop]
+GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
+
+#calcul de la proba de DL
+ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
+for (i in 1:Nb_Pop) {
+  Temp_Sample <- popsub(data_GenInd_ASex_MLL, Table_PPR$Pop[i])
+  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] # Attention c'est assez long à tourner 
+}
+
+
+## Utilisation de Fstat pour calculer les autres indices HO, HE, Fis et Ar
+
+data_Fstat <-genind2hierfstat(data_GenInd_ASex_MLL)
+
+# Boucles qui permet de calculer les indices souhaités pour chaque population (et pas la globalité)
+a =0
+for (i in levels(data_Fstat$pop) ){
+  Poptmp <- data_GenInd_ASex_MLL[which(data_GenInd_ASex_MLL$pop==i),]
+  #Poptmp  <-genind2hierfstat(Poptmp)
+  fstat_basic_Temporel <- basic.stats(Poptmp)
+  a = a+1
+  Ho[a]<-fstat_basic_Temporel$overall["Ho"]  
+  Hs[a]<-fstat_basic_Temporel$overall["Hs"]  
+  Fis[a]<-fstat_basic_Temporel$overall["Fis"] 
+}
+
+# calcul de la richess allélique
+Obj_Ar <- allelic.richness(data_Fstat[which(data_Fstat[,"pop"]!="NA"),])
+Ar_per_loc <- Obj_Ar$Ar
+#Ar_per_loc <- Ar_per_loc[c(1:2, 4:13, 15:23),] # pour sortir les locus 100 et 26 qui sont absents de certaines pops
+Ar<- vector(mode ="numeric", length = Nb_Pop)
+for (i in 1:Nb_Pop){ 
+  Ar[i] = mean(Ar_per_loc[,i])
+}
+
+## Mise en forme du tableau final
+Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis, rbarD)
+colnames(Tab_Indices_per_pop) <- Pop
+Tab_Indices_per_mll <- t(Tab_Indices_per_pop)
+kable(Tab_Indices_per_mll, digits = 3)
+
+# Assuming 'ASex_data' is your data frame containing MLG and MLL information
+mlg_counts <- aggregate(MLG ~ MLL_poppr, data = ASex_data, FUN = function(x) length(unique(x)))
+rownames(mlg_counts) <- mlg_counts[,1]
+
+aSexual_lineages <- merge(mlg_counts,Tab_Indices_per_mll,by="row.names",all.x=TRUE)
+
+
+
+```
+
+##G/N and Fis calculation for Mll for Sexual group (as profile)
+
+```{r}
+#create table of genotype
+
+# Select columns with "Mlp" in the name and the first column as isolate id
+
+Sex_data <- genotype_data[genotype_data$profile== "Sex", ]
+
+# Select columns with "Mlp" in the name and the first column as isolate id
+genotype_cols_Sex <- c(grep("Mlp", names(Sex_data), value = TRUE))
+genotype_Sex <- Sex_data[, genotype_cols_Sex]
+
+#make isolate id as column names 
+rownames(genotype_Sex) <- rownames(Sex_data)
+
+
+
+# Convert to genind object
+data_GenInd_Sex_MLL <- df2genind(
+  X = genotype_Sex,   #data.frame containing allele data only 
+  sep = NULL,
+  ncode = 3,           #an optional integer giving the number of characters used for coding one genotype at one locus.
+  ind.names = rownames(genotype_Sex),  # individuals names
+  loc.names = colnames(genotype_Sex),  # markers names
+  pop = Sex_data$MLL_poppr,                       # giving the population of each individual
+  NA.char = "999",                      # string corresponding to missing allele 999 or 999999
+  ploidy = 2,
+  type = "codom",                       #codom' stands for 'codominant' (e.g. microstallites, allozymes)
+  strata = NULL,
+  hierarchy = NULL,
+  check.ploidy = getOption("adegenet.check.ploidy")
+)
+
+
+data_Genclone_Sex <- as.genclone(data_GenInd_Sex_MLL)
+
+data_Sex_filtered <-filter_stats(data_Genclone_Sex, distance = diss.dist, plot = TRUE, missing = "asis")
+
+
+rm (Ar_per_loc, aSexual_lineages, data_Fstat, data_Genclone_ASex, data_Genclone_Sex, data_GenInd_ASex_MLL,
+    data_GenInd_Cluster, data_GenInd_Sex_MLL, fstat_basic_Temporel,mlg_counts, Obj_Ar, Poptmp , 
+    Table_PPR, Temp_Sample)
+
+```
+#creat data for ClonEstiMate for asexual (clonal)
+
+```{r}
+ASex_data <- genotype_data[genotype_data$Reproduction == "Asex", ]
+#create table of ClonEstiMate software by select columns with "Mlp" and Year
+ClonEstiMate_data_asexual <- c("Year", grep("Mlp", names(ASex_data), value = TRUE))
+ClonEstiMate_data_asexual <- data[, ClonEstiMate_data_asexual]
+
+#Keep 2009, and 2011 only and remove the rest
+ClonEstiMate_data_asexual <- ClonEstiMate_data_asexual[ClonEstiMate_data_asexual$Year %in% c("2009", "2011"), ]
+
+#add pop col
+ClonEstiMate_data_asexual <- ClonEstiMate_data_asexual %>% 
+  mutate(pop = if_else(Year == 2009, "France", "France"))
+
+#Change pop col order
+ClonEstiMate_data_asexual <- ClonEstiMate_data_asexual %>% relocate(pop)
+
+
+
+#separate each 6 digits of each loci into two cols
+#1.Define the column names
+mlp_columns <- names(ClonEstiMate_data_asexual)[grepl("^Mlp_", names(ClonEstiMate_data_asexual))]
+
+#2.Loop over each MLP column 
+for(col in mlp_columns) {
+  # Create new column names
+  new_cols <- paste0(col, "_part", 1:2)
+  
+  ClonEstiMate_data_asexual <- ClonEstiMate_data_asexual %>%
+    mutate(
+      !!new_cols[1] := as.integer(substr(!!sym(col), 1, 3)),
+      !!new_cols[2] := as.integer(substr(!!sym(col), 4, 6))
+    ) %>%
+    select(-!!sym(col))  # Remove the original column
+}
+
+write.table(ClonEstiMate_data_asexual, "ClonEstiMate_data_asexual.txt", sep = "\t",quote = FALSE, row.names = FALSE, col.names =TRUE)
+
+
+```
+
+#creat data for ClonEstiMate for sexual
+
+```{r}
+Sex_data <- genotype_data[genotype_data$Reproduction == "Sex", ]
+#create table of ClonEstiMate software by select columns with "Mlp" and Year
+ClonEstiMate_data_sexual <- c("Year", grep("Mlp", names(Sex_data), value = TRUE))
+ClonEstiMate_data_sexual <- data[, ClonEstiMate_data_sexual]
+
+#Keep 2009, and 2011 only and remove the rest
+ClonEstiMate_data_sexual <- ClonEstiMate_data_sexual[ClonEstiMate_data_sexual$Year %in% c("2009", "2011"), ]
+
+#add pop col
+ClonEstiMate_data_sexual <- ClonEstiMate_data_sexual %>% 
+  mutate(pop = if_else(Year == 2009, "France", "France"))
+
+#Change pop col order
+ClonEstiMate_data_sexual <- ClonEstiMate_data_sexual %>% relocate(pop)
+
+
+
+#separate each 6 digits of each loci into two cols
+#1.Define the column names
+mlp_columns <- names(ClonEstiMate_data_sexual)[grepl("^Mlp_", names(ClonEstiMate_data_sexual))]
+
+#2.Loop over each MLP column 
+for(col in mlp_columns) {
+  # Create new column names
+  new_cols <- paste0(col, "_part", 1:2)
+  
+  ClonEstiMate_data_sexual <- ClonEstiMate_data_sexual %>%
+    mutate(
+      !!new_cols[1] := as.integer(substr(!!sym(col), 1, 3)),
+      !!new_cols[2] := as.integer(substr(!!sym(col), 4, 6))
+    ) %>%
+    select(-!!sym(col))  # Remove the original column
+}
+
+write.table(ClonEstiMate_data_sexual, "ClonEstiMate_data_sexual.txt", sep = "\t",quote = FALSE, row.names = FALSE, col.names =TRUE)
+
+
+```
+
 ## 3. Ascending order for fixation of MLL
 
 ```{r}
@@ -771,6 +1044,10 @@ colnames(genotype_data)[colnames(genotype_data) == "N"] <- "new_MLL"
 
 # Ascending order 
 genotype_data <- genotype_data[order(genotype_data$new_MLL),]
+
+
+#save the result 
+write.xlsx(genotype_data,"new_genotype_data.xlsx", rowNames = TRUE)
 
 
 ```
@@ -893,14 +1170,6 @@ ggsave("tree_plot1.png", p, width = 17, height = 8, dpi = 600, bg = "transparent
 ggsave("tree_plot2.png", p2, width = 17, height = 8, dpi = 600, bg = "transparent")  # Save the plot with desired dimensions
 
 ```
-
-
-
-
-
-
-
-
 
 
 

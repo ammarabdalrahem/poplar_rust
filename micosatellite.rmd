@@ -139,6 +139,7 @@ genotype_data$MLL_poppr <- mll_assignments
 ```
 
 #creat data for ClonEstiMate
+#need to remove missing data 999999
 
 ```{r}
 #create table of ClonEstiMate software by select columns with "Mlp" and Year
@@ -196,6 +197,7 @@ genotype_mlp <- data[, genotype_cols]
 #make isolate id as column names 
 rownames(genotype_mlp) <- rownames(genotype_data)
 
+#need to add rule for n.clust
 
 # First identification by cluster
 grp <- find.clusters(data_GenInd, method = "kmeans", stat = "BIC", n.pca= 90 , n.clust= 2, n.iter=100000, n.start=100)
@@ -923,17 +925,17 @@ rm (Ar_per_loc, aSexual_lineages, data_Fstat, data_Genclone_ASex, data_Genclone_
 #creat data for ClonEstiMate for asexual (clonal)
 
 ```{r}
-ASex_data <- genotype_data[genotype_data$Reproduction == "Asex", ]
+ASex_data <- genotype_data[genotype_data$profile == "Asex", ]
 #create table of ClonEstiMate software by select columns with "Mlp" and Year
-ClonEstiMate_data_asexual <- c("Year", grep("Mlp", names(ASex_data), value = TRUE))
-ClonEstiMate_data_asexual <- data[, ClonEstiMate_data_asexual]
+ClonEstiMate_data_asexual <- c("year", grep("Mlp", names(ASex_data), value = TRUE))
+ClonEstiMate_data_asexual <- ASex_data[, ClonEstiMate_data_asexual]
 
 #Keep 2009, and 2011 only and remove the rest
-ClonEstiMate_data_asexual <- ClonEstiMate_data_asexual[ClonEstiMate_data_asexual$Year %in% c("2009", "2011"), ]
+ClonEstiMate_data_asexual <- ClonEstiMate_data_asexual[ClonEstiMate_data_asexual$year %in% c("2009", "2011"), ]
 
 #add pop col
 ClonEstiMate_data_asexual <- ClonEstiMate_data_asexual %>% 
-  mutate(pop = if_else(Year == 2009, "France", "France"))
+  mutate(pop = if_else(year == 2009, "France", "France"))
 
 #Change pop col order
 ClonEstiMate_data_asexual <- ClonEstiMate_data_asexual %>% relocate(pop)
@@ -965,17 +967,17 @@ write.table(ClonEstiMate_data_asexual, "ClonEstiMate_data_asexual.txt", sep = "\
 #creat data for ClonEstiMate for sexual
 
 ```{r}
-Sex_data <- genotype_data[genotype_data$Reproduction == "Sex", ]
+Sex_data <- genotype_data[genotype_data$profile == "Sex"& genotype_data$Reproduction== "Sex", ]
 #create table of ClonEstiMate software by select columns with "Mlp" and Year
-ClonEstiMate_data_sexual <- c("Year", grep("Mlp", names(Sex_data), value = TRUE))
-ClonEstiMate_data_sexual <- data[, ClonEstiMate_data_sexual]
+ClonEstiMate_data_sexual <- c("year", grep("Mlp", names(Sex_data), value = TRUE))
+ClonEstiMate_data_sexual <- Sex_data[, ClonEstiMate_data_sexual]
 
 #Keep 2009, and 2011 only and remove the rest
-ClonEstiMate_data_sexual <- ClonEstiMate_data_sexual[ClonEstiMate_data_sexual$Year %in% c("2009", "2011"), ]
+ClonEstiMate_data_sexual <- ClonEstiMate_data_sexual[ClonEstiMate_data_sexual$year %in% c("2009", "2011"), ]
 
 #add pop col
 ClonEstiMate_data_sexual <- ClonEstiMate_data_sexual %>% 
-  mutate(pop = if_else(Year == 2009, "France", "France"))
+  mutate(pop = if_else(year == 2009, "France", "France"))
 
 #Change pop col order
 ClonEstiMate_data_sexual <- ClonEstiMate_data_sexual %>% relocate(pop)
@@ -1233,7 +1235,21 @@ dev.off()
 
 ```
 
+#Mental test (assess the correlation between genetic and geographic distance matrices)
 
+```{r}
+
+library(poppr)
+library(adegenet)
+library(vegan)
+library(pegas)
+
+
+data_Genclone_Sex <- as.genclone(data_GenInd_Sex_MLL)
+
+
+
+```
 
 
 

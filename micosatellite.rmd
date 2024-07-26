@@ -1088,11 +1088,19 @@ marker_data_sex <- Temp_Sex_data[, grep("^Mlp_", colnames(Temp_Sex_data))]
 geo_data_sex <- Temp_Sex_data[, c("Long", "Lat")]
 
 
+marker_data_asex <- Temp_Asex_data[, grep("^Mlp_", colnames(Temp_Asex_data))]
+geo_data_asex <- Temp_Asex_data[, c("Long", "Lat")]
+
 # Combine marker data with geographic coordinates
 combined_data_sex <- cbind(geo_data_sex, marker_data_sex)
+combined_data_asex <- cbind(geo_data_asex, marker_data_asex)
+
+
 
 # Sort data by coordinates
-combined_data_sex <- combined_data[order(combined_data$Long, combined_data$Lat), ]
+combined_data_sex_sorted <- combined_data_sex[order(combined_data_sex$Long, combined_data_sex$Lat), ]
+combined_data_asex_sorted <- combined_data_asex[order(combined_data_asex$Long, combined_data_asex$Lat), ]
+
 
 # Create Genepop formatted data
 genepop_format <- function(data) {
@@ -1125,10 +1133,17 @@ genepop_format <- function(data) {
   return(result)
 }
 # Generate Genepop formatted lines
-genepop_lines <- genepop_format(combined_data_sex)
+genepop_lines_sex <- genepop_format(combined_data_sex_sorted)
+genepop_lines_asex <- genepop_format(combined_data_asex_sorted)
+
+
+
+
 
 # Write to a Genepop file
-writeLines(genepop_lines, "genetic_data.txt")
+writeLines(genepop_lines_sex, "genetic_data_sex.txt")
+writeLines(genepop_lines_asex, "genetic_data_asex.txt")
+
 
 # Print the Genepop formatted lines (for checking)
 #cat(genepop_lines, sep = "\n")
@@ -1140,24 +1155,33 @@ writeLines(genepop_lines, "genetic_data.txt")
 
 ```{r}
 # Define the path to your input Genepop file
-input_file <- "genetic_data.txt"
+input_file_sex <- "genetic_data_sex.txt"
+input_file_asex <- "genetic_data_asex.txt"
+
 
 # Define the path for the output file
-output_file <- "genetic_data.iso"
+output_file_sex <- "genetic_data_sex_IBD_output.txt"
+output_file_asex <- "genetic_data_asex_IBD_output.txt"
 
-locinfile <- genepopExample('w2.txt')
 
 
 ibd(
-  inputFile = input_file,
-  outputFile = output_file,
+  inputFile = input_file_sex,
+  outputFile = output_file_sex,
   dataType = "Diploid",  # Specify the data type
-  statistic = "e",  # Specify the statistic to use
+  statistic = "SingleGeneDiv",  # Specify the statistic to use
   geographicScale = "2D",  # Specify the geographic scale
 )
 
-# Print the output file path
-cat("IBD analysis output saved to:", outputFile, "\n")
+ibd(
+  inputFile = input_file_asex,
+  outputFile = output_file_asex,
+  dataType = "Diploid",  # Specify the data type
+  statistic = "SingleGeneDiv",  # Specify the statistic to use
+  geographicScale = "2D",  # Specify the geographic scale
+)
+
+
 
 ```
 

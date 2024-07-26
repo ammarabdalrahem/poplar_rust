@@ -138,50 +138,6 @@ genotype_data$MLL_poppr <- mll_assignments
 
 ```
 
-#creat data for ClonEstiMate
-#need to remove missing data 999999
-
-```{r}
-#create table of ClonEstiMate software by select columns with "Mlp" and Year
-ClonEstiMate_data <- c("Year", grep("Mlp", names(data), value = TRUE))
-ClonEstiMate_data <- data[, ClonEstiMate_data]
-
-#Keep 2009, and 2011 only and remove the rest
-ClonEstiMate_data <- ClonEstiMate_data[ClonEstiMate_data$Year %in% c("2009", "2011"), ]
-
-#add pop col
-ClonEstiMate_data <- ClonEstiMate_data %>% 
-  mutate(pop = if_else(Year == 2009, "France", "France"))
-
-#Change pop col order
-ClonEstiMate_data <- ClonEstiMate_data %>% relocate(pop)
-
-
-
-#separate each 6 digits of each loci into two cols
-#1.Define the column names
-mlp_columns <- names(ClonEstiMate_data)[grepl("^Mlp_", names(ClonEstiMate_data))]
-
-#2.Loop over each MLP column 
-for(col in mlp_columns) {
-  # Create new column names
-  new_cols <- paste0(col, "_part", 1:2)
-  
-  ClonEstiMate_data <- ClonEstiMate_data %>%
-    mutate(
-      !!new_cols[1] := as.integer(substr(!!sym(col), 1, 3)),
-      !!new_cols[2] := as.integer(substr(!!sym(col), 4, 6))
-    ) %>%
-    select(-!!sym(col))  # Remove the original column
-}
-
-write.table(ClonEstiMate_data, "ClonEstiMate_data.txt", sep = "\t",quote = FALSE, row.names = FALSE, col.names =TRUE)
-
-
-```
-
-
-
 
 
 ## Identification the individuals profile(sex/asex) (two clusters)
@@ -393,7 +349,7 @@ data_GenInd_ASex_MLL <- df2genind(
 )
 data_Genclone_ASex <- as.genclone(data_GenInd_ASex_MLL)
 
-data_Sex_filtered <-filter_stats(data_Genclone_ASex, distance = diss.dist, plot = TRUE, missing = "asis")
+data_ASex_filtered <-filter_stats(data_Genclone_ASex, distance = diss.dist, plot = TRUE, missing = "asis")
 
 Nb_Pop = length(levels(data_GenInd_ASex_MLL@pop))
 
@@ -504,53 +460,11 @@ data_Genclone_Sex <- as.genclone(data_GenInd_Sex_MLL)
 data_Sex_filtered <-filter_stats(data_Genclone_Sex, distance = diss.dist, plot = TRUE, missing = "asis")
 
 
-rm (Ar_per_loc, aSexual_lineages, data_Fstat, data_Genclone_ASex, data_Genclone_Sex, data_GenInd_ASex_MLL,
-    data_GenInd_Cluster, data_GenInd_Sex_MLL, fstat_basic_Temporel,mlg_counts, Obj_Ar, Poptmp , 
-    Table_PPR, Temp_Sample)
+#rm (Ar_per_loc, aSexual_lineages, data_Fstat, data_Genclone_ASex, data_Genclone_Sex, data_GenInd_ASex_MLL,
+#    data_GenInd_Cluster, data_GenInd_Sex_MLL, fstat_basic_Temporel,mlg_counts, Obj_Ar, Poptmp , 
+#    Table_PPR, Temp_Sample)
 
 ```
-
-
-
-##check the new MLL anf old Mll for aSexual
-
-```{r}
-
-ASex_data$mll <- data$Mll[match(row.names(ASex_data), data$Isolate)]
-# Create a contingency table
-contingency_table_ASex <- table(ASex_data$MLL_poppr, ASex_data$mll)
-
-# Print the contingency table
-write.table(contingency_table_ASex, file = "contingency_table_ASex.csv", sep = ",", quote = FALSE)
-
-```
-
-
-##check the new MLL anf old Mll for Sexual
-```{r}
-
-Sex_data$mll <- data$Mll[match(row.names(Sex_data), data$Isolate)]
-# Create a contingency table
-contingency_table_Sex <- table(Sex_data$MLL_poppr, Sex_data$mll)
-
-# Print the contingency table
-write.table(contingency_table_Sex, file = "contingency_table_Sex.csv", sep = ",", quote = FALSE)
-
-
-# Find row and column names where values are higher than 3
-high_value_indices <- which(contingency_table_Sex > 3, arr.ind = TRUE)
-high_value_rows <- rownames(contingency_table_Sex)[high_value_indices[, 1]]
-high_value_cols <- colnames(contingency_table_Sex)[high_value_indices[, 2]]
-high_values <- contingency_table_Sex[high_value_indices]
-
-# Create a new table with row names, column names, and values
-high_values_table <- data.frame(RowName = high_value_rows, ColumnName = high_value_cols, Value = high_values)
-
-write.table(high_values_table, file = "contingency_table_Sex.csv", sep = ",", quote = FALSE)
-
-
-```
-
 
 
 ## create table of repeated Mll diffrent years
@@ -877,6 +791,8 @@ aSexual_lineages <- merge(mlg_counts,Tab_Indices_per_mll,by="row.names",all.x=TR
 
 ```
 
+
+
 ##G/N and Fis calculation for Mll for Sexual group (as profile)
 
 ```{r}
@@ -922,89 +838,8 @@ rm (Ar_per_loc, aSexual_lineages, data_Fstat, data_Genclone_ASex, data_Genclone_
     Table_PPR, Temp_Sample)
 
 ```
-#creat data for ClonEstiMate for asexual (clonal)
-
-```{r}
-ASex_data <- genotype_data[genotype_data$profile == "Asex", ]
-#create table of ClonEstiMate software by select columns with "Mlp" and Year
-ClonEstiMate_data_asexual <- c("year", grep("Mlp", names(ASex_data), value = TRUE))
-ClonEstiMate_data_asexual <- ASex_data[, ClonEstiMate_data_asexual]
-
-#Keep 2009, and 2011 only and remove the rest
-ClonEstiMate_data_asexual <- ClonEstiMate_data_asexual[ClonEstiMate_data_asexual$year %in% c("2009", "2011"), ]
-
-#add pop col
-ClonEstiMate_data_asexual <- ClonEstiMate_data_asexual %>% 
-  mutate(pop = if_else(year == 2009, "France", "France"))
-
-#Change pop col order
-ClonEstiMate_data_asexual <- ClonEstiMate_data_asexual %>% relocate(pop)
 
 
-
-#separate each 6 digits of each loci into two cols
-#1.Define the column names
-mlp_columns <- names(ClonEstiMate_data_asexual)[grepl("^Mlp_", names(ClonEstiMate_data_asexual))]
-
-#2.Loop over each MLP column 
-for(col in mlp_columns) {
-  # Create new column names
-  new_cols <- paste0(col, "_part", 1:2)
-  
-  ClonEstiMate_data_asexual <- ClonEstiMate_data_asexual %>%
-    mutate(
-      !!new_cols[1] := as.integer(substr(!!sym(col), 1, 3)),
-      !!new_cols[2] := as.integer(substr(!!sym(col), 4, 6))
-    ) %>%
-    select(-!!sym(col))  # Remove the original column
-}
-
-write.table(ClonEstiMate_data_asexual, "ClonEstiMate_data_asexual.txt", sep = "\t",quote = FALSE, row.names = FALSE, col.names =TRUE)
-
-
-```
-
-#creat data for ClonEstiMate for sexual
-
-```{r}
-Sex_data <- genotype_data[genotype_data$profile == "Sex"& genotype_data$Reproduction== "Sex", ]
-#create table of ClonEstiMate software by select columns with "Mlp" and Year
-ClonEstiMate_data_sexual <- c("year", grep("Mlp", names(Sex_data), value = TRUE))
-ClonEstiMate_data_sexual <- Sex_data[, ClonEstiMate_data_sexual]
-
-#Keep 2009, and 2011 only and remove the rest
-ClonEstiMate_data_sexual <- ClonEstiMate_data_sexual[ClonEstiMate_data_sexual$year %in% c("2009", "2011"), ]
-
-#add pop col
-ClonEstiMate_data_sexual <- ClonEstiMate_data_sexual %>% 
-  mutate(pop = if_else(year == 2009, "France", "France"))
-
-#Change pop col order
-ClonEstiMate_data_sexual <- ClonEstiMate_data_sexual %>% relocate(pop)
-
-
-
-#separate each 6 digits of each loci into two cols
-#1.Define the column names
-mlp_columns <- names(ClonEstiMate_data_sexual)[grepl("^Mlp_", names(ClonEstiMate_data_sexual))]
-
-#2.Loop over each MLP column 
-for(col in mlp_columns) {
-  # Create new column names
-  new_cols <- paste0(col, "_part", 1:2)
-  
-  ClonEstiMate_data_sexual <- ClonEstiMate_data_sexual %>%
-    mutate(
-      !!new_cols[1] := as.integer(substr(!!sym(col), 1, 3)),
-      !!new_cols[2] := as.integer(substr(!!sym(col), 4, 6))
-    ) %>%
-    select(-!!sym(col))  # Remove the original column
-}
-
-write.table(ClonEstiMate_data_sexual, "ClonEstiMate_data_sexual.txt", sep = "\t",quote = FALSE, row.names = FALSE, col.names =TRUE)
-
-
-```
 
 ## 3. Ascending order for fixation of MLL
 
@@ -1053,10 +888,6 @@ write.xlsx(genotype_data,"new_genotype_data.xlsx", rowNames = TRUE)
 
 
 ```
-
-
-
-
 
 
 
@@ -1235,23 +1066,99 @@ dev.off()
 
 ```
 
-#Mental test (assess the correlation between genetic and geographic distance matrices)
+#convert data to genepop IBD data
 
 ```{r}
+# Set 'Isolate' as row names
+rownames(data) <- data$Isolate
 
-library(poppr)
-library(adegenet)
-library(vegan)
-library(pegas)
+# Ensure the 'Isolate' column matches row names in genotype_data
+data <- data[match(rownames(genotype_data), data$Isolate), ]
+
+# Add longitude and latitude to genotype_data
+genotype_data$Long <- data$Long
+genotype_data$Lat <- data$Lat
+
+# Separate Sex and Asex
+Temp_Sex_data <- genotype_data[genotype_data$Reproduction== "Sex", ]
+Temp_Asex_data <- genotype_data[genotype_data$Reproduction== "Asex", ]
+
+# Extract relevant columns: marker data and geographic coordinates
+marker_data_sex <- Temp_Sex_data[, grep("^Mlp_", colnames(Temp_Sex_data))]
+geo_data_sex <- Temp_Sex_data[, c("Long", "Lat")]
 
 
-data_Genclone_Sex <- as.genclone(data_GenInd_Sex_MLL)
+# Combine marker data with geographic coordinates
+combined_data_sex <- cbind(geo_data_sex, marker_data_sex)
 
+# Sort data by coordinates
+combined_data_sex <- combined_data[order(combined_data$Long, combined_data$Lat), ]
 
+# Create Genepop formatted data
+genepop_format <- function(data) {
+  # Initialize result with the title line for Genepop file
+  result <- c("Title line for Genepop file")
+  
+  # Add marker names, each on a new line
+  markers <- colnames(data)[-c(1, 2)]
+  result <- c(result, markers)
+  
+  # Extract unique coordinates
+  unique_coords <- unique(data[, c("Long", "Lat")])
+  
+  # Process each unique coordinate
+  for (i in 1:nrow(unique_coords)) {
+    # Add population indicator
+    result <- c(result, "Pop")
+    
+    # Get rows corresponding to the current unique coordinate
+    coord <- unique_coords[i, ]
+    coord_data <- data[data$Long == coord$Long & data$Lat == coord$Lat, ]
+    
+    # Format each row
+    for (j in 1:nrow(coord_data)) {
+      ind_data <- paste(coord_data[j, 1], coord_data[j, 2], ",", paste(coord_data[j, -c(1, 2)], collapse = " "))
+      result <- c(result, ind_data)
+    }
+  }
+  
+  return(result)
+}
+# Generate Genepop formatted lines
+genepop_lines <- genepop_format(combined_data_sex)
+
+# Write to a Genepop file
+writeLines(genepop_lines, "genetic_data.txt")
+
+# Print the Genepop formatted lines (for checking)
+#cat(genepop_lines, sep = "\n")
 
 ```
 
 
+#Mental test IBD (assess the correlation between genetic and geographic distance matrices)
 
+```{r}
+# Define the path to your input Genepop file
+input_file <- "genetic_data.txt"
+
+# Define the path for the output file
+output_file <- "genetic_data.iso"
+
+locinfile <- genepopExample('w2.txt')
+
+
+ibd(
+  inputFile = input_file,
+  outputFile = output_file,
+  dataType = "Diploid",  # Specify the data type
+  statistic = "e",  # Specify the statistic to use
+  geographicScale = "2D",  # Specify the geographic scale
+)
+
+# Print the output file path
+cat("IBD analysis output saved to:", outputFile, "\n")
+
+```
 
 

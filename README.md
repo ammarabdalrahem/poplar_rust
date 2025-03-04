@@ -1,2 +1,2 @@
-# poplar_rust
-Evolutionary and functional studies of the variability of reproductive modes in the poplar rust fungus, Melampsora larici-populina.
+# Long-lasting coexistence of multiple asexual lineages alongside their sexual counterparts in a fungal plant pathogen
+Ammar Abdalrahem, Axelle Andrieux, Ronan Becheler, Sébastien Duplessis, Pascal Frey, Benoit Marcais, Solenn Stoeckel, Fabien Halkett

@@ -11,10 +11,7 @@ date: "`r Sys.Date()`"
 
 
 
-## Introduction
-
-The following automated workflow presents the population genetics analysis of Mlp using SSR marker data. This analysis includes genetic diversity and temporal and spatial analysis to define and compare sexual and asexual lineages. The workflow is divided into several steps, including data import, MLG and MLL definition, cluster identification, population genetic indices calculation, reproduction mode assignment based on genetic indices, and MLL persistence. The workflow is designed to be reproducible. The data used in this analysis is from the study "Long-lasting coexistence of multiple asexual lineages alongside their sexual counterparts in a fungal plant pathogen." by Abdalrahem et al. (2025).
-
+## Installation of required packages
 
 ```{r, include=FALSE}
 #Code to install packages if necessary, and read them with library function
@@ -36,8 +33,6 @@ for (package in required_packages) {
 
 
 ### Data retrieval
-
-To begin the analysis, we will import the data from the Excel file. The data contains information about the population, year, and genotypes of Mlp isolates. We will filter out any isolates with unknown populations and convert the data into a data frame for further analysis.The data is available in the file "SexAsex4Ammar_240730.xlsx".
 
 ```{r, include=FALSE}
 # get the path of the current R script
@@ -80,18 +75,18 @@ genotype_data$Isolate = NULL
 
 # Convert data to genind object
 data_GenInd <- df2genind(
-  X = genotype_data,   # data.frame containing allele data 
+  X = genotype_data,   
   sep = NULL,
   ncode = 3,           # the number of characters used for coding one genotype at one locus.
-  ind.names = rownames(genotype_data),  # individuals names
-  loc.names = colnames(genotype_data),  # markers names
+  ind.names = rownames(genotype_data),  
+  loc.names = colnames(genotype_data),  
   pop = general_data$Pop,               # giving the population of each individual
   NA.char = "999",                      # string corresponding to missing allele 999 or 999999
   ploidy = 2,
-  type = "codom",                       #codom' stands for 'codominant' (e.g. microstallites)
+  type = "codom",                       
   strata = NULL,      
   hierarchy = NULL,
-  check.ploidy = getOption("adegenet.check.ploidy") # check the ploidy of the data if it is correct
+  check.ploidy = getOption("adegenet.check.ploidy") 
 )
 
 # Convert data to genclone object
@@ -103,7 +98,7 @@ data_Genclone <- as.genclone(data_GenInd)
 mlg_assignments <- mlg.filter(data_Genclone, threshold = 0, distance = "diss.dist", threads = 1L,missing = "asis") 
 
 
-#add MLG result to the table
+# Add MLG result to the table
 genotype_data$MLG <- mlg_assignments
 
 #Define the MLL 
@@ -123,46 +118,43 @@ print(average_thresh  <- cutoff_predictor(data_filtered$average$THRESHOLDS))
 print(nearest_thresh  <- cutoff_predictor(data_filtered$nearest$THRESHOLDS))
 
 #Define the MLL threshold 
-#According to the first gap on the Genetic Distance Cutoff plot
-#The threshold is set to 5 to represent the minimum genetic distance for grouping individuals into the same MLL
+#The threshold is set to X to represent the minimum genetic distance for grouping individuals into the same MLL
 
 mll_assignments<- mlg.filter(data_Genclone, threshold = average_thresh , algorithm = "average_neighbor" , distance = "diss.dist", threads = 1L, missing = "asis" ) 
 
 genotype_data$MLL <- mll_assignments
 
 
-#write.csv2(genotype_data, "data_new.csv")
-
 ```
 
 ### Ascending order for fixation of MLL
 
-The idea to sort the MLLs in ascending order is to fix the order of the MLLs in the dataset. This will help in further analysis and visualization of the data. The MLLs are sorted based on the frequency of their occurrence in the dataset. The MLL with the highest frequency is assigned as 1 etc. The sorted MLLs are then added to the genotype data table as a new column called "organised_MLL".
+The idea to sort the MLLs in ascending order is to fix the order of the MLLs in the dataset. This will help in further analysis and visualization of the data. The MLLs are sorted based on the frequency of their occurrence in the dataset. The sorted MLLs are then added to the genotype data table as a new column called "organised_MLL".
 
 ```{r}
 # Calculate the frequency of each MLL combination
 count_MLL_table <- data.frame(MLL = unique(genotype_data$MLL), Count = NA)
 
-# for each MLL value, count the number of occurrences in the genotype data
+# For each MLL value, count the number of occurrences in the genotype data
 # then store the count in the "Count" column of the count_MLL_table
 for (i in 1:nrow(count_MLL_table)) {
   mll_value <- count_MLL_table$MLL[i]
   count_MLL_table$Count[i] <- sum(genotype_data$MLL == mll_value)
 }
 
-# Sort the dataframe in descending order by the "Count" column
+
 count_MLL_table <- count_MLL_table[order(-count_MLL_table$Count), ]
 
-# Create a new column "N" with values in ascending order
+
 count_MLL_table$N <- 1:nrow(count_MLL_table)
 
 # Add row names to count_MLL_table
 rownames(count_MLL_table) <- NULL
 
-# Create a temporary column with row names for genotype_data
+
 genotype_data$temp_row_names <- rownames(genotype_data)
 
-# Merge the "count_MLL_table" dataframe with the original "genotype_data" dataframe
+
 genotype_data <- merge(genotype_data, count_MLL_table, by = "MLL", all.x = TRUE)
 
 # Restore the original row names
@@ -170,19 +162,13 @@ rownames(genotype_data) <- genotype_data$temp_row_names
 
 # Remove the temporary column
 genotype_data$temp_row_names <- NULL
-#genotype_data$MLL <- NULL
 
-# Rename the "N" column to "organised_MLL"
+
 colnames(genotype_data)[colnames(genotype_data) == "N"] <- "organised_MLL"
 
 
 # Ascending order 
 genotype_data <- genotype_data[order(genotype_data$organised_MLL),]
-
-
-#save the result 
-#write.xlsx(genotype_data,"new_genotype_data.xlsx", rowNames = TRUE)
-
 
 ```
 
@@ -191,15 +177,13 @@ genotype_data <- genotype_data[order(genotype_data$organised_MLL),]
 
 ### Assignment of isolates to clusters based on genetic data 
 
-Since our goal to define the reproductive mode of the population, we will assign the isolates to clusters based on their genetic data. We will use the Discriminant Analysis of Principal Components (DAPC) method to assign the isolates to clusters. The DAPC method is used to identify clusters in genetic data and assign individuals to these clusters based on their genetic profiles.
-
 ```{r}
-# create a table of genotypes for allele data only
+# Create a table of genotypes for allele data only
 # Select columns with "Mlp" in the name and the first column as isolate id
 genotype_cols <- c(grep("Mlp", names(genotype_data), value = TRUE))
 genotype_mlp <- genotype_data[, genotype_cols]
 
-#make isolate id as column names 
+# Make isolate id as column names 
 rownames(genotype_mlp) <- rownames(genotype_data)
 
 # Convert data to genind object
@@ -207,27 +191,26 @@ data_GenInd <- df2genind(
   X = genotype_mlp,   # data.frame containing allele data 
   sep = NULL,
   ncode = 3,           # the number of characters used for coding one genotype at one locus.
-  ind.names = rownames(genotype_mlp),  # individuals names
-  loc.names = colnames(genotype_mlp),  # markers names
-  pop = genotype_data$MLL,               # giving the population of each individual
+  ind.names = rownames(genotype_mlp),  
+  loc.names = colnames(genotype_mlp),  
+  pop = genotype_data$MLL,               # giving the mll of each individual
   NA.char = "999",                      # string corresponding to missing allele 999 or 999999
   ploidy = 2,
-  type = "codom",                       #codom' stands for 'codominant' (e.g. microstallites)
+  type = "codom",                       
   strata = NULL,      
   hierarchy = NULL,
-  check.ploidy = getOption("adegenet.check.ploidy") # check the ploidy of the data if it is correct
+  check.ploidy = getOption("adegenet.check.ploidy") 
 )
 
 
 
 # First identification by cluster
-#K=2 because we know from pervious studies that the population is divided into two reproductive modes
-#BIC
+
 grp <- find.clusters(data_GenInd, method = "kmeans", stat = "BIC", n.pca= 90 , n.clust= 2, n.iter=10000, n.start=100)
 cluster_assignments <- grp$grp # Assign the cluster assignments to a variable
 genotype_data$cluster <- cluster_assignments # Add the cluster assignments to the genotype data table
 
-# Visualize the cluster assignments
+# Check the cluster assignments
 dapc1 <- dapc(data_GenInd, grp$grp, n.pca= 90 , n.clust=2, n.da = 100)
 scatter(dapc1)
 compoplot(dapc1, txt.leg=paste("Cluster", 1:2), lab="", ncol=1, xlab="individuals")
@@ -240,7 +223,6 @@ table(grp$grp, dapc1$assign)
 #pca_var <- dapc1$pca.eig # extract the PCA eigenvalues
 #sum(pca_var[1:90]) / sum(pca_var) * 100 # calculate the percentage of variance explained by the first 90 PCs
 
-#found special individual 
 # Convert the posterior probabilities to a data frame
 posterior_data <- as.data.frame(dapc1$posterior)
 
@@ -250,16 +232,8 @@ posterior_data$Individual <- rownames(posterior_data)
 # Melt the data frame for visualization
 melted_data <- reshape2::melt(posterior_data, id.vars = "Individual", variable.name = "Cluster", value.name = "Probability")
 
-# Create a scatter plot with individual names as labels
-#ggplot(melted_data, aes(x = Cluster, y = Probability, color = Cluster, label = Individual)) +
-#  geom_point() +
-#  xlab("Cluster") +
-#  ylab("Probability") +
-#  labs(color = "Cluster") +
-#  theme_minimal() +
-#  geom_text(nudge_y = 0.02)  # Add labels slightly above the data points
 
-# Create a scatter plot with individual names as clear labels using ggrepel
+# Scatter plot (show names of ind.)
 cluster_assignments <- ggplot(melted_data, aes(x = Cluster, y = Probability, color = Cluster, label = Individual)) +
   geom_point() +
   xlab("Genotypic clusters") +
@@ -267,34 +241,22 @@ cluster_assignments <- ggplot(melted_data, aes(x = Cluster, y = Probability, col
   labs(color = "Clusters") +
   theme(text = element_text(family = "Times New Roman", size = 12) # Global font settings
 ) +
-  geom_text_repel()  # Use geom_text_repel to avoid overlapping labels
+  geom_text_repel()  # to avoid overlapping labels
 
 cluster_assignments
 
 ggsave("cluster_assignments.png", cluster_assignments, width = 8, height = 6, dpi = 300, bg = "transparent")  
-
-# Plot histograms
-#ggplot(melted_data, aes(x = Probability)) +
-#  geom_histogram(binwidth = 0.05) +
-#  facet_wrap(~ Cluster, scales = "free_y") +
-#  theme_minimal() +
-#  labs(title = "Distribution of Posterior Probabilities", x = "Probability", y = "Frequency")
 
 
 #reomve uncertin cluster
 # Subset the main table to include only individuals with probability >= 0.8 in either cluster
 certain_data <- genotype_mlp[posterior_data[, 1] >= 0.80 | posterior_data[, 2] >= 0.80 , ]
 
-
-# Create a new table for uncertain individuals
 uncertain_data <- genotype_mlp[posterior_data[, 1] < 0.80 & posterior_data[, 2] < 0.80, ]
-
 
 genotype_data$Cluster <- ifelse(posterior_data[, 1] >= 0.80, "Cluster 1", #80% 
                        ifelse(posterior_data[, 2] >= 0.80, "Cluster 2", 
                                             "None Determined"))
-
-
 
 
 # Inspect the assignments
@@ -311,7 +273,6 @@ genotype_data <- subset(genotype_data, Cluster %in% c("Cluster 1", "Cluster 2"))
 
 ### Calculation of population genetic indices for each cluster 
 
-Calcluation of the population genetic indices for each cluster, including the allelic richness (Ar), the observed heterozygosity (Ho), the expected heterozygosity (Hs), the inbreeding coefficient (Fis), and Linkage disequilibrium as rbarD value. The results are presented in a table format for easy comparison between the two clusters.
 
 ```{r}
 
@@ -320,21 +281,21 @@ Calcluation of the population genetic indices for each cluster, including the al
 genotype_cols <- c(grep("Mlp", names(genotype_data), value = TRUE))
 genotype_mlp <- genotype_data[, genotype_cols]
 
-#make isolate id as column names 
+# Make isolate id as column names 
 rownames(genotype_mlp) <- rownames(genotype_data)
 
 
 # Convert to genind object
 data_GenInd_Cluster <- df2genind(
-  X = genotype_mlp,   #data.frame containing allele data only 
+  X = genotype_mlp,   
   sep = NULL,
-  ncode = 3,           #an optional integer giving the number of characters used for coding one genotype at one locus.
-  ind.names = rownames(genotype_mlp),  # individuals names
-  loc.names = colnames(genotype_mlp),  # markers names
-  pop = genotype_data$Cluster,          # Define the population of each individual by it's cluster
-  NA.char = "999",                      # string corresponding to missing allele 999 or 999999
+  ncode = 3,           
+  ind.names = rownames(genotype_mlp), 
+  loc.names = colnames(genotype_mlp),  
+  pop = genotype_data$Cluster,         
+  NA.char = "999",                      
   ploidy = 2,
-  type = "codom",                       #codom' stands for 'codominant' (e.g. microstallites, allozymes)
+  type = "codom",                      
   strata = NULL,
   hierarchy = NULL,
   check.ploidy = getOption("adegenet.check.ploidy")
@@ -342,7 +303,7 @@ data_GenInd_Cluster <- df2genind(
 
 Nb_Pop = length(levels(data_GenInd_Cluster@pop))
 
-# Attribution des différents vecteurs que l'on souhaite calculer
+# Assigning the vectors to be calculated
 N <- vector(mode ="integer", length = Nb_Pop)
 GsurN<- vector(mode ="numeric", length = Nb_Pop)
 Ho <- vector(mode ="numeric", length = Nb_Pop)
@@ -355,29 +316,28 @@ Fis_var <- vector(mode ="numeric", length = Nb_Pop)
 
 Pop <- levels(data_GenInd_Cluster$pop)
 
-## Utilisation de Poppr pour récupérer les premiers indices N, G/N et rbarD
-Table_PPR <- poppr(data_GenInd_Cluster) # marche bien
+# Poppr to retrieve the first indices N, G/N and rbarD
+Table_PPR <- poppr(data_GenInd_Cluster) 
 
 rbarD <- Table_PPR$rbarD[1:Nb_Pop]
 N <- Table_PPR$N[1:Nb_Pop]
 GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 
-#calcul de la proba de DL
+# Calculation proba of LD 
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   Temp_Sample <- popsub(data_GenInd_Cluster, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] # Attention c'est assez long à tourner 
+  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] 
 }
 
 
-## Utilisation de Fstat pour calculer les autres indices HO, HE, Fis et Ar
+# Use Fstat to calculate other Ho, He, Fis and Ar indices
 data_Fstat <-genind2hierfstat(data_GenInd_Cluster)
 
-# Boucles qui permet de calculer les indices souhaités pour chaque population (et pas la globalité)
+# Loops to calculate the desired indices for each population
 a =0
 for (i in levels(data_Fstat$pop) ){
   Poptmp <- data_GenInd_Cluster[which(data_GenInd_Cluster$pop==i),]
-  #Poptmp  <-genind2hierfstat(Poptmp)
   fstat_basic_Temporel <- basic.stats(Poptmp)
   a = a+1
   Ho[a]<-fstat_basic_Temporel$overall["Ho"]  
@@ -388,21 +348,17 @@ for (i in levels(data_Fstat$pop) ){
 
 }
 
-# calcul de la richess allélique
+# Calculating allelic richness
 Obj_Ar <- allelic.richness(data_Fstat[which(data_Fstat[,"pop"]!="NA"),])
 Ar_per_loc <- Obj_Ar$Ar
-#Ar_per_loc <- Ar_per_loc[c(1:2, 4:13, 15:23),] # pour sortir les locus 100 et 26 qui sont absents de certaines pops
 Ar<- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop){ 
   Ar[i] = mean(Ar_per_loc[,i])
 }
 
-##Beta_parato
-
-
 
 ## Mise en forme du tableau final
-Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis,Fis_sd,Fis_var,rbarD)
+Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis, Fis_sd, Fis_var, rbarD)
 colnames(Tab_Indices_per_pop) <- Pop
 Tab_Indices_per_pop <- t(Tab_Indices_per_pop)
 kable(Tab_Indices_per_pop, digits = 3)
@@ -411,41 +367,40 @@ kable(Tab_Indices_per_pop, digits = 3)
 
 
 ### Define the reproduction mode
-Depending on the Fis value, we can assign the reproduction mode to each cluster. If the Fis value is negative, the cluster is assigned as asexual reproduction. If the Fis value is positive, the cluster is assigned as sexual reproduction. The results are stored in the "assignment" column of the genotype data table.
+
 
 ```{r}
 # Tab_Indices_per_pop is the dataframe containing the results
 # Loop through each row of the dataframe
-# Define the  reproduction mode based on the Fis value (assignment)
+# Define the  reproduction mode based on the Fis value (cluster approach)
 for (i in 1:nrow(Tab_Indices_per_pop)) {
   cluster_name <- rownames(Tab_Indices_per_pop)[i]  # Get the cluster name
   
   # Check if the Fis value is negative
   if (Tab_Indices_per_pop[i, "Fis"] < 0) {
-    # If Fis is negative, set the "Reproduction" column to "Asex" for the corresponding cluster
+    # If Fis is negative, set to "Asex" 
     genotype_data$assignment[genotype_data$Cluster == cluster_name] <- "Asex"
   } else {
-    # If Fis is non-negative, set the "Reproduction" column to "Sex" for the corresponding cluster
+    # If Fis is non-negative, set the "Cluster" column to "Sex" for the corresponding cluster
     genotype_data$assignment[genotype_data$Cluster == cluster_name] <- "Sex"
   }
 }
 
-
-
 ```
 
-## Define the reproduction mode by biological approach
+## Define the reproduction mode by resampling approach
 
-Depending on the MLL persistence, we can assign the reproduction mode to each lineage. If the same lineage exist at least two different years (avoiding clone mate) is asex, otherwise is sex. This done through two steps, first, we create a table of repeated MLLs in different years, then we assign the reproduction mode based on the MLL persistence. The results are stored in the "Mll_persistence" column of the genotype data table.
+Depending on the MLL persistence, we can assign the reproduction mode to each lineage. If the same lineage exist at least two different years (to avoide clone mate) is asex, otherwise is sex.
 
 ### Create table of repeated Mll diffrent years
 ```{r}
-
+# Add the Year column to the genotype_data table
 genotype_data$Year <- general_data$Year[match(row.names(genotype_data), general_data$Isolate)]
 
 # Calculate the frequency of each MLL-Year combination
 repeated_MLL_table <- genotype_data [,c("organised_MLL","Year")]
 rownames(repeated_MLL_table) <- NULL
+
 # Rename the columns for clarity
 colnames(repeated_MLL_table) <- c("organised_MLL",  "Year")
 
@@ -474,7 +429,6 @@ mll_year_df <- data.frame(
   organised_MLL = as.integer(names(mll_year_dict)),
   Years = sapply(mll_year_dict, paste, collapse = ", ")
 )
-
 
 
 # Create a new column to store the counts
@@ -510,7 +464,7 @@ for (i in 1:nrow(repeated_MLL_table)) {
 #remove all non repeated mll  
 mll_year_df <- mll_year_df[!(mll_year_df$YearCount == 1), ]
 
-#test
+#Test
 #mll_year_df [mll_year_df$organised_MLL == 1, ]
 
 # Print the contingency table
@@ -518,11 +472,9 @@ write.table(mll_year_df, file = "filtered_mll_years.csv", sep = ",", quote = FAL
 ```
 
 
-### Assign the reproduction mode based on the MLL persistence
+### Assign the reproduction mode based on the MLL persistence (resampling approach)
 
 ```{r}
-# the loop to define the Mll_persistence based on the number of years the MLL exist in the dataset, at least two years to be asex
-
 for (i in 1:nrow(mll_year_df)) {
   if (mll_year_df$YearCount[i] >= 1) { 
     mll <- mll_year_df[mll_year_df$organised_MLL == mll_year_df$organised_MLL[i], ]
@@ -556,22 +508,21 @@ genotype_data[is.na(genotype_data$Mll_persistence), "Mll_persistence"] <- "Sex"
 ```
 
 
-## Population genetic indices for each reproduction mode (biological approach)
+## Population genetic indices for each reproduction mode (resampling approach)
 
-for sex and asex reproduction mode (biological approach), we will calculate the population genetic indices for each mode separately. The results are presented in a table format for easy comparison between the two reproduction modes.
 
 ```{r}
 # Convert to genind object
 final_GenInd <- df2genind(
-  X = genotype_mlp,   #data.frame containing allele data only 
+  X = genotype_mlp,    
   sep = NULL,
-  ncode = 3,           #an optional integer giving the number of characters used for coding one genotype at one locus.
-  ind.names = rownames(genotype_mlp),  # individuals names
-  loc.names = colnames(genotype_mlp),  # markers names
-  pop = genotype_data$Mll_persistence,                       # giving the population of each individual
-  NA.char = "999",                      # string corresponding to missing allele 999 or 999999
+  ncode = 3,           
+  ind.names = rownames(genotype_mlp),  
+  loc.names = colnames(genotype_mlp),  
+  pop = genotype_data$Mll_persistence,                      
+  NA.char = "999",                     
   ploidy = 2,
-  type = "codom",                       #codom' stands for 'codominant' (e.g. microstallites, allozymes)
+  type = "codom",                       
   strata = NULL,
   hierarchy = NULL,
   check.ploidy = getOption("adegenet.check.ploidy")
@@ -580,7 +531,7 @@ final_GenInd <- df2genind(
 
 Nb_Pop = length(levels(final_GenInd@pop))
 
-# Attribution des différents vecteurs que l'on souhaite calculer
+# Assigned the vectors to be 
 N <- vector(mode ="integer", length = Nb_Pop)
 GsurN<- vector(mode ="numeric", length = Nb_Pop)
 Ho <- vector(mode ="numeric", length = Nb_Pop)
@@ -591,14 +542,14 @@ Fis_sd <- vector(mode ="numeric", length = Nb_Pop)
 
 Pop <- levels(final_GenInd$pop)
 
-## Utilisation de Poppr pour récupérer les premiers indices N, G/N et rbarD
+# Poppr for N, G/N et rbarD
 Table_PPR <- poppr(final_GenInd) # marche bien
 
 rbarD <- Table_PPR$rbarD[1:Nb_Pop]
 N <- Table_PPR$N[1:Nb_Pop]
 GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 
-#calcul de la proba de DL
+# LD
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   Temp_Sample <- popsub(final_GenInd, Table_PPR$Pop[i])
@@ -606,34 +557,32 @@ for (i in 1:Nb_Pop) {
 }
 
 
-## Utilisation de Fstat pour calculer les autres indices HO, HE, Fis et Ar
-
+# Ho, He, Fis et Ar
 data_Fstat <-genind2hierfstat(final_GenInd)
 
-# Boucles qui permet de calculer les indices souhaités pour chaque population (et pas la globalité)
+# Per each population
 a =0
 for (i in levels(data_Fstat$pop) ){
   Poptmp <- final_GenInd[which(final_GenInd$pop==i),]
-  #Poptmp  <-genind2hierfstat(Poptmp)
   fstat_basic_Temporel <- basic.stats(Poptmp)
   a = a+1
   Ho[a]<-fstat_basic_Temporel$overall["Ho"]  
   Hs[a]<-fstat_basic_Temporel$overall["Hs"]  
   Fis[a]<-fstat_basic_Temporel$overall["Fis"] 
   Fis_sd[a]<- sd(fstat_basic_Temporel$perloc$Fis)
+  Fis_var[a]<- var(fstat_basic_Temporel$perloc$Fis)
 }
 
-# calcul de la richess allélique
+# Ar
 Obj_Ar <- allelic.richness(data_Fstat[which(data_Fstat[,"pop"]!="NA"),])
 Ar_per_loc <- Obj_Ar$Ar
-#Ar_per_loc <- Ar_per_loc[c(1:2, 4:13, 15:23),] # pour sortir les locus 100 et 26 qui sont absents de certaines pops
 Ar<- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop){ 
   Ar[i] = mean(Ar_per_loc[,i])
 }
 
-## Mise en forme du tableau final
-Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis, rbarD,Fis_sd)
+## Final Table
+Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis, rbarD,Fis_sd,Fis_var)
 colnames(Tab_Indices_per_pop) <- Pop
 Tab_Indices_per_pop <- t(Tab_Indices_per_pop)
 kable(Tab_Indices_per_pop, digits = 3)
@@ -643,9 +592,7 @@ kable(Tab_Indices_per_pop, digits = 3)
 
 
 
-### Fisher's exact test for the Mll_persistence and assignment 
-
-cross-tabulation of the assignment and Mll_persistence categories and perform a Fisher's exact test to determine if there is a significant association between the two variables.
+### Fisher's exact test for the Clustering and resampling approches
 
 ```{r, echo=FALSE}
 # Create the contingency table
@@ -656,7 +603,7 @@ print(contingency_table)
 
 # Rename the rows and columns of the contingency table
 rownames(contingency_table) <- c("Asex_cluster", "Sex_cluster")
-colnames(contingency_table) <- c("Asex_biological", "Sex_biological")
+colnames(contingency_table) <- c("Asex_resampling", "Sex_resampling")
 
 # Fisher's exact test 
 fisher_test <- fisher.test(contingency_table)
@@ -664,95 +611,38 @@ print(fisher_test)
 
 
 ```
-```{r}
-Asex_cluster_Asex_biological <- contingency_table[1, 1]
-Sex_cluster_Asex_biological <- contingency_table[2, 1]
-Asex_cluster_Sex_biological <- contingency_table[1,2]
-Sex_cluster_Sex_biological <- contingency_table[2,2]
-
-# Overlap between Asex_cluster and Asex_biological
-overlap_Asex_cluster_Asex_biological <- Asex_cluster_Asex_biological
-
-# Overlap between Sex_cluster and Asex_biological
-overlap_Sex_cluster_Asex_biological <- Sex_cluster_Asex_biological
-
-# Overlap between Asex_cluster and Sex_biological
-overlap_Asex_cluster_Sex_biological <- Asex_cluster_Sex_biological
-
-# Overlap between Sex_cluster and Sex_biological
-overlap_Sex_cluster_Sex_biological <- Sex_cluster_Sex_biological
 
 
-# Calculate the overlaps for the Venn diagram
-Asex_cluster <- Asex_cluster_Asex_biological + Asex_cluster_Sex_biological
-Sex_cluster <- Sex_cluster_Asex_biological + Sex_cluster_Sex_biological
-Asex_biological <- Asex_cluster_Asex_biological + Sex_cluster_Asex_biological
-Sex_biological <- Asex_cluster_Sex_biological + Sex_cluster_Sex_biological
+## Define reproduction mode based on combination of both approches
 
-# Define colors using RColorBrewer (we’ll use 4 colors)
-myCol <- viridis(4,alpha = 0.7)
-
-library(eulerr)
-
-# Define the data
-fit <- euler(c(
-  "Asex cluster" = Asex_cluster,
-  "Sex cluster" = Sex_cluster,
-  "Asex biological" = Asex_biological,
-  "Sex biological" = Sex_biological,
-  "Asex cluster&Asex biological" = overlap_Asex_cluster_Asex_biological,
-  "Asex cluster&Sex biological" = overlap_Asex_cluster_Sex_biological,
-  "Sex cluster&Asex biological" = overlap_Sex_cluster_Asex_biological,
-  "Sex cluster&Sex biological" = overlap_Sex_cluster_Sex_biological
-))
-
-png("euler_venn_sex_asex.png", width = 2000, height = 2000, res = 300)
-
-# Plot 
-plot(fit,
-     fills = list(fill = myCol),
-     quantities = list(cex = 1,font = 2 ),  # Increase number size
-     legend = list(
-       cex = 1.5,            # Legend size
-       fontfamily = "Times New Roman" 
-     ),
-     legend.pos = "right")
-
-# Close the file
-dev.off()
-
-```
-## Define reproduction mode based on both approches
-
-If the individual is assigned to the Asex cluster or has Asex MLL persistence, assign "Asex" to the Reproduction column. Otherwise, assign "sex" to the Reproduction column.
 
 ```{r}
-# Define the reproduction mode based on the assignment and Mll_persistence
-#if it Asex either in assignment or Mll_persistence then it is Asex
+
+# If the individual is assigned to the Asex cluster or has Asex resampling, assign "Asex" to the Reproduction column. Otherwise, assign "sex".
+
 genotype_data$Reproduction <- ifelse(genotype_data$assignment == "Asex" | genotype_data$Mll_persistence == "Asex", "Asex","Sex") 
 
 
 ```
 
- If the individual is assigned to the Asex cluster or has Asex MLL persistence, assign "Asex" to the Reproduction column, because it could be asexually reproducing but didn't sampled so it is assigned as asex but not showed as asex in the MLL_persistence on the other hand if the individual is exist in the MLL_persistence but not assigned as asex then it is asexually reproducing biologically 
 
 
-## Population genetic indices for each reproduction mode
+## Population genetic indices for each reproduction mode (both approches)
 
-For sex and asex reproduction mode, we will calculate the population genetic indices for each mode separately. The results are presented in a table format for easy comparison between the two reproduction modes.
+
 
 ```{r}
 # Convert to genind object
 final_GenInd <- df2genind(
-  X = genotype_mlp,   #data.frame containing allele data only 
+  X = genotype_mlp,   
   sep = NULL,
-  ncode = 3,           #an optional integer giving the number of characters used for coding one genotype at one locus.
-  ind.names = rownames(genotype_mlp),  # individuals names
-  loc.names = colnames(genotype_mlp),  # markers names
-  pop = genotype_data$Reproduction,                       # giving the population of each individual
-  NA.char = "999",                      # string corresponding to missing allele 999 or 999999
+  ncode = 3,          
+  ind.names = rownames(genotype_mlp),  
+  loc.names = colnames(genotype_mlp), 
+  pop = genotype_data$Reproduction,                       
+  NA.char = "999",                     
   ploidy = 2,
-  type = "codom",                       #codom' stands for 'codominant' (e.g. microstallites, allozymes)
+  type = "codom",                       
   strata = NULL,
   hierarchy = NULL,
   check.ploidy = getOption("adegenet.check.ploidy")
@@ -761,7 +651,7 @@ final_GenInd <- df2genind(
 
 Nb_Pop = length(levels(final_GenInd@pop))
 
-# Attribution des différents vecteurs que l'on souhaite calculer
+
 N <- vector(mode ="integer", length = Nb_Pop)
 GsurN<- vector(mode ="numeric", length = Nb_Pop)
 Ho <- vector(mode ="numeric", length = Nb_Pop)
@@ -772,49 +662,47 @@ Fis_sd <- vector(mode ="numeric", length = Nb_Pop)
 
 Pop <- levels(final_GenInd$pop)
 
-## Utilisation de Poppr pour récupérer les premiers indices N, G/N et rbarD
+# N, G/N et rbarD
 Table_PPR <- poppr(final_GenInd) # marche bien
 
 rbarD <- Table_PPR$rbarD[1:Nb_Pop]
 N <- Table_PPR$N[1:Nb_Pop]
 GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 
-#calcul de la proba de DL
+# LD
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   Temp_Sample <- popsub(final_GenInd, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] # Attention c'est assez long à tourner 
+  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] 
 }
 
 
-## Utilisation de Fstat pour calculer les autres indices HO, HE, Fis et Ar
-
+#Fstat 
 data_Fstat <-genind2hierfstat(final_GenInd)
 
-# Boucles qui permet de calculer les indices souhaités pour chaque population (et pas la globalité)
+# Per each population
 a =0
 for (i in levels(data_Fstat$pop) ){
   Poptmp <- final_GenInd[which(final_GenInd$pop==i),]
-  #Poptmp  <-genind2hierfstat(Poptmp)
   fstat_basic_Temporel <- basic.stats(Poptmp)
   a = a+1
   Ho[a]<-fstat_basic_Temporel$overall["Ho"]  
   Hs[a]<-fstat_basic_Temporel$overall["Hs"]  
   Fis[a]<-fstat_basic_Temporel$overall["Fis"] 
   Fis_sd[a]<- sd(fstat_basic_Temporel$perloc$Fis)
+  Fis_var[a]<- var(fstat_basic_Temporel$perloc$Fis)
 }
 
-# calcul de la richess allélique
+# Ar
 Obj_Ar <- allelic.richness(data_Fstat[which(data_Fstat[,"pop"]!="NA"),])
 Ar_per_loc <- Obj_Ar$Ar
-#Ar_per_loc <- Ar_per_loc[c(1:2, 4:13, 15:23),] # pour sortir les locus 100 et 26 qui sont absents de certaines pops
 Ar<- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop){ 
   Ar[i] = mean(Ar_per_loc[,i])
 }
 
-## Mise en forme du tableau final
-Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis, rbarD,Fis_sd)
+## Final table
+Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis, rbarD,Fis_sd, Fis_var)
 colnames(Tab_Indices_per_pop) <- Pop
 Tab_Indices_per_pop <- t(Tab_Indices_per_pop)
 kable(Tab_Indices_per_pop, digits = 3)
@@ -824,40 +712,36 @@ kable(Tab_Indices_per_pop, digits = 3)
 write.table(genotype_data, file = "new_genotype_data.csv", sep = ",", quote = FALSE, row.names = TRUE)
 
 #clean
-rm (Ar_per_loc, data_Fstat, fstat_basic_Temporel, Obj_Ar, Poptmp , Table_PPR, Temp_Sample)
+#rm (Ar_per_loc, data_Fstat, fstat_basic_Temporel, Obj_Ar, Poptmp , Table_PPR, Temp_Sample)
 
 ```
 
 
-## Population genetic indices for asex reproduction mode
+## Population genetic indices for asex group only 
 
 ```{r, echo=FALSE}
-#create table of genotype
 
-# Select columns with "Mlp" in the name and the first column as isolate id
-
+# Select columns with "Asex"
 Asex_data <- genotype_data[genotype_data$Reproduction == "Asex", ]
 
 # Select columns with "Mlp" in the name and the first column as isolate id
 genotype_cols_Asex <- c(grep("Mlp", names(Asex_data), value = TRUE))
 genotype_Asex <- Asex_data[, genotype_cols_Asex]
-
-#make isolate id as column names 
 rownames(genotype_Asex) <- rownames(Asex_data)
 
 
 
 # Convert to genind object
 data_GenInd_Asex_MLL <- df2genind(
-  X = genotype_Asex,   #data.frame containing allele data only 
+  X = genotype_Asex,  
   sep = NULL,
-  ncode = 3,           #an optional integer giving the number of characters used for coding one genotype at one locus.
-  ind.names = rownames(genotype_Asex),  # individuals names
-  loc.names = colnames(genotype_Asex),  # markers names
-  pop = Asex_data$organised_MLL,                       # giving the population of each individual
-  NA.char = "999",                      # string corresponding to missing allele 999 or 999999
+  ncode = 3,           
+  ind.names = rownames(genotype_Asex), 
+  loc.names = colnames(genotype_Asex),  
+  pop = Asex_data$organised_MLL,                      
+  NA.char = "999",                      
   ploidy = 2,
-  type = "codom",                       #codom' stands for 'codominant' (e.g. microstallites, allozymes)
+  type = "codom",                      
   strata = NULL,
   hierarchy = NULL,
   check.ploidy = getOption("adegenet.check.ploidy")
@@ -868,7 +752,8 @@ data_Asex_filtered <-filter_stats(data_Genclone_Asex, distance = diss.dist, plot
 
 Nb_Pop = length(levels(data_GenInd_Asex_MLL@pop))
 
-# Attribution des différents vecteurs que l'on souhaite calculer
+
+
 N <- vector(mode ="integer", length = Nb_Pop)
 GsurN<- vector(mode ="numeric", length = Nb_Pop)
 Ho <- vector(mode ="numeric", length = Nb_Pop)
@@ -879,59 +764,59 @@ Fis_sd <- vector(mode ="numeric", length = Nb_Pop)
 
 Pop <- levels(data_GenInd_Asex_MLL$pop)
 
-## Utilisation de Poppr pour récupérer les premiers indices N, G/N et rbarD
-Table_PPR <- poppr(data_GenInd_Asex_MLL) # marche bien
-
+# N, G/N et rbarD
+Table_PPR <- poppr(data_GenInd_Asex_MLL) 
 rbarD <- Table_PPR$rbarD[1:Nb_Pop]
 N <- Table_PPR$N[1:Nb_Pop]
 GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 
-#calcul de la proba de DL
+# LD
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   Temp_Sample <- popsub(data_GenInd_Asex_MLL, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] # Attention c'est assez long à tourner 
+  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4]  
 }
 
 
-## Utilisation de Fstat pour calculer les autres indices HO, HE, Fis et Ar
+# Ho, He, Fis et Ar
 
 data_Fstat <-genind2hierfstat(data_GenInd_Asex_MLL)
 
-# Boucles qui permet de calculer les indices souhaités pour chaque population (et pas la globalité)
+# Per each population
 a =0
 for (i in levels(data_Fstat$pop) ){
   Poptmp <- data_GenInd_Asex_MLL[which(data_GenInd_Asex_MLL$pop==i),]
-  #Poptmp  <-genind2hierfstat(Poptmp)
   fstat_basic_Temporel <- basic.stats(Poptmp)
   a = a+1
   Ho[a]<-fstat_basic_Temporel$overall["Ho"]  
   Hs[a]<-fstat_basic_Temporel$overall["Hs"]  
   Fis[a]<-fstat_basic_Temporel$overall["Fis"] 
   Fis_sd[a]<- sd(fstat_basic_Temporel$perloc$Fis)
+  Fis_var[a]<- var(fstat_basic_Temporel$perloc$Fis)
 
 }
 
-# calcul de la richess allélique
+# Ar
 Obj_Ar <- allelic.richness(data_Fstat[which(data_Fstat[,"pop"]!="NA"),])
 Ar_per_loc <- Obj_Ar$Ar
-#Ar_per_loc <- Ar_per_loc[c(1:2, 4:13, 15:23),] # pour sortir les locus 100 et 26 qui sont absents de certaines pops
 Ar<- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop){ 
   Ar[i] = mean(Ar_per_loc[,i])
 }
 
-## Mise en forme du tableau final
-Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis, rbarD,Fis_sd)
+# Final Table
+Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis, rbarD,Fis_sd,Fis_var)
 colnames(Tab_Indices_per_pop) <- Pop
 Tab_Indices_per_mll <- t(Tab_Indices_per_pop)
 kable(head(Tab_Indices_per_mll, 10), digits = 3)
 
-# Assuming 'Asex_data' is your data frame containing MLG and MLL information
-mlg_counts <- aggregate(MLG ~ organised_MLL, data = Asex_data, FUN = function(x) length(unique(x)))
-rownames(mlg_counts) <- mlg_counts[,1]
 
-Asexual_lineages <- merge(mlg_counts,Tab_Indices_per_mll,by="row.names",all.x=TRUE)
+
+# Assuming 'Asex_data' is your data frame containing MLG and MLL information
+#mlg_counts <- aggregate(MLG ~ organised_MLL, data = Asex_data, FUN = function(x) length(unique(x)))
+#rownames(mlg_counts) <- mlg_counts[,1]
+
+#Asexual_lineages <- merge(mlg_counts,Tab_Indices_per_mll,by="row.names",all.x=TRUE)
 
 
 
@@ -939,35 +824,30 @@ Asexual_lineages <- merge(mlg_counts,Tab_Indices_per_mll,by="row.names",all.x=TR
 
 
 
-## Population genetic indices for sex reproduction mode
+## Population genetic indices for sex group only 
 
 ```{r, echo=FALSE}
-#create table of genotype
 
-# Select columns with "Mlp" in the name and the first column as isolate id
-
+# Select columns with "Sex" 
 Sex_data <- genotype_data[genotype_data$Reproduction == "Sex", ]
-
-# Select columns with "Mlp" in the name and the first column as isolate id
 genotype_cols_Sex <- c(grep("Mlp", names(Sex_data), value = TRUE))
 genotype_Sex <- Sex_data[, genotype_cols_Sex]
 
-#make isolate id as column names 
 rownames(genotype_Sex) <- rownames(Sex_data)
 
 
 
 # Convert to genind object
 data_GenInd_Sex_MLL <- df2genind(
-  X = genotype_Sex,   #data.frame containing allele data only 
+  X = genotype_Sex,   
   sep = NULL,
-  ncode = 3,           #an optional integer giving the number of characters used for coding one genotype at one locus.
-  ind.names = rownames(genotype_Sex),  # individuals names
-  loc.names = colnames(genotype_Sex),  # markers names
-  pop = Sex_data$organised_MLL,                       # giving the population of each individual
-  NA.char = "999",                      # string corresponding to missing allele 999 or 999999
+  ncode = 3,           
+  ind.names = rownames(genotype_Sex),  
+  loc.names = colnames(genotype_Sex), 
+  pop = Sex_data$organised_MLL,                       
+  NA.char = "999",                      
   ploidy = 2,
-  type = "codom",                       #codom' stands for 'codominant' (e.g. microstallites, allozymes)
+  type = "codom",                      
   strata = NULL,
   hierarchy = NULL,
   check.ploidy = getOption("adegenet.check.ploidy")
@@ -978,7 +858,7 @@ data_Sex_filtered <-filter_stats(data_Genclone_Sex, distance = diss.dist, plot =
 
 Nb_Pop = length(levels(data_GenInd_Sex_MLL@pop))
 
-# Attribution des différents vecteurs que l'on souhaite calculer
+
 N <- vector(mode ="integer", length = Nb_Pop)
 GsurN<- vector(mode ="numeric", length = Nb_Pop)
 Ho <- vector(mode ="numeric", length = Nb_Pop)
@@ -990,50 +870,49 @@ Fis_sd <- vector(mode ="numeric", length = Nb_Pop)
 
 Pop <- levels(data_GenInd_Sex_MLL$pop)
 
-## Utilisation de Poppr pour récupérer les premiers indices N, G/N et rbarD
-Table_PPR <- poppr(data_GenInd_Sex_MLL) # marche bien
+# N, G/N et rbarD
+Table_PPR <- poppr(data_GenInd_Sex_MLL) 
 
 rbarD <- Table_PPR$rbarD[1:Nb_Pop]
 N <- Table_PPR$N[1:Nb_Pop]
 GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 
-#calcul de la proba de DL
+# LD
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   Temp_Sample <- popsub(data_GenInd_Sex_MLL, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] # Attention c'est assez long à tourner 
+  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] 
 }
 
 
-## Utilisation de Fstat pour calculer les autres indices HO, HE, Fis et Ar
+# Ho, He, Fis et Ar
 
 data_Fstat <-genind2hierfstat(data_GenInd_Sex_MLL)
 
-# Boucles qui permet de calculer les indices souhaités pour chaque population (et pas la globalité)
+# Per population
 a =0
 for (i in levels(data_Fstat$pop) ){
   Poptmp <- data_GenInd_Sex_MLL[which(data_GenInd_Sex_MLL$pop==i),]
-  #Poptmp  <-genind2hierfstat(Poptmp)
   fstat_basic_Temporel <- basic.stats(Poptmp)
   a = a+1
   Ho[a]<-fstat_basic_Temporel$overall["Ho"]  
   Hs[a]<-fstat_basic_Temporel$overall["Hs"]  
   Fis[a]<-fstat_basic_Temporel$overall["Fis"] 
   Fis_sd[a]<- sd(fstat_basic_Temporel$perloc$Fis)
+  Fis_var[a]<- var(fstat_basic_Temporel$perloc$Fis)
 
 }
 
-# calcul de la richess allélique
+# Ar
 Obj_Ar <- allelic.richness(data_Fstat[which(data_Fstat[,"pop"]!="NA"),])
 Ar_per_loc <- Obj_Ar$Ar
-#Ar_per_loc <- Ar_per_loc[c(1:2, 4:13, 15:23),] # pour sortir les locus 100 et 26 qui sont absents de certaines pops
 Ar<- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop){ 
   Ar[i] = mean(Ar_per_loc[,i])
 }
 
-## Mise en forme du tableau final
-Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis, rbarD,Fis_sd)
+## final table
+Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis, rbarD,Fis_sd,Fis_var)
 colnames(Tab_Indices_per_pop) <- Pop
 Tab_Indices_per_mll <- t(Tab_Indices_per_pop)
 kable(head(Tab_Indices_per_mll, 10), digits = 3)
@@ -1063,15 +942,15 @@ genotype_data$Region <- general_data$Region[match(row.names(genotype_data), gene
 
 # Convert to genind object
 final_GenInd <- df2genind(
-  X = genotype_mlp,   #data.frame containing allele data only 
+  X = genotype_mlp,  
   sep = NULL,
-  ncode = 3,           #an optional integer giving the number of characters used for coding one genotype at one locus.
-  ind.names = rownames(genotype_mlp),  # individuals names
-  loc.names = colnames(genotype_mlp),  # markers names
-  pop = genotype_data$organised_MLL,                       # giving the population of each individual
-  NA.char = "999",                      # string corresponding to missing allele 999 or 999999
+  ncode = 3,         
+  ind.names = rownames(genotype_mlp),  
+  loc.names = colnames(genotype_mlp),  
+  pop = genotype_data$organised_MLL,                 
+  NA.char = "999",                    
   ploidy = 2,
-  type = "codom",                       #codom' stands for 'codominant' (e.g. microstallites, allozymes)
+  type = "codom",                    
   strata = NULL,
   hierarchy = NULL,
   check.ploidy = getOption("adegenet.check.ploidy")
@@ -1090,16 +969,13 @@ groupInfo <- split(rownames(genotype_data), genotype_data$Reproduction)
 
 # Group the tree labels based on the group information
 tree <- groupOTU(tree2, groupInfo)
-npg_colors <- scico(9, palette = "roma") # Extract NPG colors, 8 colors for top 8 MLLs later
+npg_colors <- brewer.pal(10, "Paired") # Extract NPG colors, 8 colors for top 8 MLLs later
 
 
-reproduction_colors <- c("Asex" = npg_colors[1], "Sex" = npg_colors[6])
+reproduction_colors <- c("Asex" = npg_colors[6], "Sex" = npg_colors[2])
 
 
-
-# Display the tree plot
-#p
-# Create the ggtree plot with circular layout
+# Create circular plot
 options(ignore.negative.edge=TRUE)
 p <- ggtree(tree, aes(color = group), layout="circular") +
   scale_color_manual(values = reproduction_colors) +  # Map custom colors to groups
@@ -1127,10 +1003,11 @@ dat1 <- data.frame(
   Location = genotype_data$Region
 
 )
-# Filter dat1 to include only MLL 1:17
+
+# Filter dat1 to include MLLs
 dat1_filtered <- dat1 %>% filter(MLL %in% c(1, 2, 3, 4, 5, 6,8,9))
 dat1_filtered$MLL <- as.factor(dat1_filtered$MLL)
-dat1_filtered$Year <- as.character(dat1_filtered$Year)  # Convert to numeric if not already
+dat1_filtered$Year <- as.character(dat1_filtered$Year) 
 
 
 # Manually define the color mapping
@@ -1138,9 +1015,9 @@ mll_color_mapping <- c(
   "1" = npg_colors[3],
   "2" = npg_colors[4],
   "3" = npg_colors[5],
-  "4" = npg_colors[2],
+  "4" = npg_colors[1],
   "6" = npg_colors[7],
-  "5" = "grey",  # Set MLL 6 to grey, it's sexual lineage
+  "5" = npg_colors[10],  #  it's sexual lineage
   "8" = npg_colors[8],  
   "9" = npg_colors[9]
 )
@@ -1149,7 +1026,7 @@ mll_color_mapping <- c(
 # Convert MLL to factor
 dat1_filtered$MLL <- as.factor(dat1_filtered$MLL)
 
-# Use %<+% of ggtree to add annotation dataset to the tree
+# Add annotation dataset to the tree
 p1 <- p  %<+% dat1_filtered
 
 
@@ -1174,12 +1051,12 @@ p2 <- p +
   theme(
     panel.background = element_rect(fill='transparent'), # transparent panel bg
     plot.background = element_rect(fill='transparent', color=NA), # transparent plot bg
-    panel.grid.major = element_blank(), # remove major gridlines
-    panel.grid.minor = element_blank(), # remove minor gridlines
-    legend.background = element_rect(fill='transparent'), # transparent legend bg
-    legend.box.background = element_rect(fill='transparent'), # transparent legend panel
-    legend.text = element_text(color = 'black', face = 'bold', size = 13), # set legend text color and size
-    legend.title = element_text(color = 'black', face = 'bold', size = 15) # set legend title color and size
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(), 
+    legend.background = element_rect(fill='transparent'), 
+    legend.box.background = element_rect(fill='transparent'), 
+    legend.text = element_text(color = 'black', face = 'bold', size = 13), 
+    legend.title = element_text(color = 'black', face = 'bold', size = 15) 
 
   ) 
 
@@ -1191,16 +1068,15 @@ p2
 
 
 
+ggsave("tree_plot1.png", p, width = 17, height = 8, dpi = 600, bg = "transparent")  # Save the plot
 
-ggsave("tree_plot1.png", p, width = 17, height = 8, dpi = 600, bg = "transparent")  # Save the plot with desired dimensions
-
-ggsave("tree_plot2.png", p2, width = 17, height = 8, dpi = 600, bg = "transparent")  # Save the plot with desired dimensions
+ggsave("tree_plot2.png", p2, width = 17, height = 8, dpi = 600, bg = "transparent")  # Save the 
 
 ```
 
 
 
-## Spatial analysis
+## Spatial analysis 
 
 
 ```{r, echo=FALSE}
@@ -1217,25 +1093,21 @@ genotype_data$Lat <- general_data$Lat[match(row.names(genotype_data), general_da
 
 pop_data <- genotype_data %>%
   group_by(Pop, Long, Lat, Reproduction) %>%
-  summarize(n = n(), .groups = "drop") %>%   # Specify .groups = "drop" to remove grouping
+  summarize(n = n(), .groups = "drop") %>%  
   mutate(percent = n / sum(n)) %>%
   select(Pop, Long, Lat, Reproduction, n, percent)
 
 
-#draw map Representative the popular individual across France map within reproductive mode
-# The area of the France Region;
+#draw map 
+# The area of the France Region
 xlim <- c(-4.3,9.1)
 ylim <- c(41, 51)
 
 # Creates an xyz object for use with the function draw.pie
 xyz <- make.xyz(pop_data$Long, pop_data$Lat, pop_data$percent, pop_data$Reproduction)
 
-
-# Create a named vector to map profiles to colors
-#profile_color_mapping <- setNames(my_colors, unique_profiles)
-
 # Create a named vector for profile colors
-profile_color_mapping <- c("Asex" = npg_colors[1], "Sex" = npg_colors[6])
+profile_color_mapping <- c("Asex" = npg_colors[6], "Sex" = npg_colors[2])
 transparent_colors <- adjustcolor(profile_color_mapping, alpha.f = 0.7)
 
 
@@ -1265,12 +1137,11 @@ dev.off()
 
 ```{r , fig.width=10, fig.height=8}
 
-
+# Filter the data to include only the years 2009 and 2011
 pop_data <- genotype_data %>%
   filter(Year == c("2009","2011")) %>% 
   group_by(Pop, Long, Lat, Reproduction) %>%
-  summarize(n = n(), .groups = "drop") %>%   # Specify .groups = "drop" to remove grouping
-  mutate(percent = n / sum(n)) %>%
+  summarize(n = n(), .groups = "drop") %>%   
   select(Pop, Long, Lat, Reproduction, n, percent)
 
 
@@ -1287,7 +1158,7 @@ xyz <- make.xyz(pop_data$Long, pop_data$Lat, pop_data$percent, pop_data$Reproduc
 #profile_color_mapping <- setNames(my_colors, unique_profiles)
 
 # Create a named vector for profile colors
-profile_color_mapping <- c("Asex" = npg_colors[1], "Sex" = npg_colors[2])
+profile_color_mapping <- c("Asex" = npg_colors[6], "Sex" = npg_colors[2])
 transparent_colors <- adjustcolor(profile_color_mapping, alpha.f = 0.7)
 
 
@@ -1368,6 +1239,7 @@ summary(glmm_model)
 
 ```
 
+
 ### Plot the regression
 
 ```{r, echo=FALSE}
@@ -1405,12 +1277,11 @@ p_lat_filtered <- ggplot(final_table_filtered, aes(x = Lat, y = nbsex / (nbsex +
   geom_line(data = prediction_data_filtered, aes(x = Lat, y = predicted_prob, color = Year), 
             linewidth = 1.2, alpha = 0.8) +  # Thicker, slightly transparent lines
   labs(
-    title = "Effect of Latitude on Sexual Reproduction (2009 vs. 2011) GLM",
     x = "Latitude",
     y = "Proportion of Sexual Reproduction",
     caption = "Point size reflects total observations (nbsex + nbAsex)"
   ) +
-  scale_color_manual(values = c("2009" = npg_colors[4], "2011" = npg_colors[5])) +  # Modern, distinct colors
+  scale_color_manual(values = c("2009" = npg_colors[3], "2011" = npg_colors[5])) +  # Modern, distinct colors
   scale_size_continuous(range = c(2, 8), name = "Sample Size") +  # Better size scaling
   theme_minimal(base_size = 12) +  # Clean theme with larger text
   theme(
@@ -1424,7 +1295,6 @@ p_lat_filtered
 
 # Save the plot
 ggsave("effect_of_latitude_filtered.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 300)
-
 
 
 
@@ -1461,11 +1331,10 @@ p_lat_filtered <- ggplot(final_table_filtered, aes(x = Lat, y = nbsex / (nbsex +
   geom_line(data = prediction_data_filtered, aes(x = Lat, y = predicted_prob, color = Year), 
             linewidth = 1.2, alpha = 0.8) +  # Prediction lines by Year
   labs(
-    title = "Effect of latitude on sexual reproduction (2009 vs. 2011) GLMM",
     x = "Latitude",
     y = "Proportion of sexual reproduction"
   ) +
-  scale_color_manual(values = c("2009" = npg_colors[4], "2011" = npg_colors[5])) +  
+  scale_color_manual(values = c("2009" = npg_colors[3], "2011" = npg_colors[5])) +  
   scale_size_continuous(range = c(2, 8), name = "Sample Size") +  
   theme(text = element_text(family = "Times New Roman", size = 12)
 ) +
@@ -1576,181 +1445,6 @@ write.table(MST_data, "MST_data_mlp_pop_as_Reproduction_for_cloneEstimate.txt", 
 ```
 
 
-## Visualization of ClonEstiMate results
-
-```{r}
-# Load the ClonEstiMate results
-clonest_results_france_all <- read_excel("ClonEstiMate_mydata/ClonEstiMate_old_results/2024-04-17-13h_22minPosterior_proba.xlsx",
-                              sheet = "France_all")
-
-clonest_results_france_all <- clonest_results_france_all %>%
-  mutate(across(everything(), as.numeric),  # Convert all columns to numeric
-         Dataset = "Mixed populataion")  # Add dataset label
-
-
-clonest_results_france_sex <- read_excel("ClonEstiMate_mydata/ClonEstiMate_old_results/2024-04-17-13h_22minPosterior_proba.xlsx",
-                                         sheet = "France_sex")
-
-clonest_results_france_sex <- clonest_results_france_sex %>% 
-  mutate(across(everything(), as.numeric),  # Convert all columns to numeric
-         Dataset = "Sexual reproduction")  # Add dataset label
-
-
-
-clonest_results_france_asex <- read_excel("ClonEstiMate_mydata/ClonEstiMate_old_results/2024-04-17-13h_22minPosterior_proba.xlsx",
-                                         sheet = "France_asex")
-
-clonest_results_france_asex <- clonest_results_france_asex %>% 
-  mutate(across(everything(), as.numeric),  # Convert all columns to numeric
-         Dataset = "Asexual reproduction")  # Add dataset label
-
-
-ggtern(data = clonest_results_france_all, 
-       aes(x = Selfing_rate, 
-           y = Outcrossing_rate, 
-           z = Rate_of_clonality)) +  
-    # Smooth density heatmap with fill corresponding to density levels
-    stat_density_tern(aes(fill = ..level..), geom = "polygon", bins = 15, alpha = 0.8) +  
-    # Color gradient for density levels
-    scale_fill_gradient(low = "yellow", high = "red") +  
-    # Classic theme for clarity
-    theme_classic() +
-    # Labels
-    labs(title = "France_Sex: 2009-2011",
-         x = "Rate of selfing",
-         y = "Rate of outcrossing",
-         z = "Rate of clonality",
-         fill = "Posterior Probability") +  
-    # Customize axis labels and tick marks
-  scale_T_continuous(breaks = seq(0, 1, by = 0.1), labels = seq(0, 1, by = 0.1)) +  
-  scale_L_continuous(breaks = seq(0, 1, by = 0.1), labels = seq(0, 1, by = 0.1)) +  
-  scale_R_continuous(breaks = seq(0, 1, by = 0.1), labels = seq(0, 1, by = 0.1))+   # Customize R-axis breaks and labels
-  theme_showarrows()
-
-
-
-
-
- 
-ggtern(data = clonest_results_france_all, 
-       aes(x = Selfing_rate, 
-           y = Outcrossing_rate, 
-           z = Rate_of_clonality, 
-           color = Posterior_probability)) +  # Map color to Posterior_probability
-  geom_point(size = 3, alpha = 0.7) +  # Plot individual points
-  scale_color_gradient(low = "yellow", high = "red", limits = c(min(clonest_results_france_all$Posterior_probability), max(clonest_results_france_all$Posterior_probability))) +  # Color gradient for Posterior_probability
-  theme_classic() +
-  labs(title = "France_Sex: 2009-2011",
-       x = "Rate of selfing",
-       y = "Rate of outcrossing",
-       z = "Rate of clonality",
-       color = "Posterior Probability") +  # Update legend title
-  scale_T_continuous(breaks = seq(0, 1, by = 0.1), labels = seq(0, 1, by = 0.1)) +  # Customize T-axis breaks and labels
-  scale_L_continuous(breaks = seq(0, 1, by = 0.1), labels = seq(0, 1, by = 0.1)) +  # Customize L-axis breaks and labels
-  scale_R_continuous(breaks = seq(0, 1, by = 0.1), labels = seq(0, 1, by = 0.1))+   # Customize R-axis breaks and labels
-  theme_showarrows()
-
-
-
-
-
-# Remove rows where Posterior_probability is zero
-filtered_all <- clonest_results_france_all 
-filtered_sex <- clonest_results_france_sex 
-filtered_asex <- clonest_results_france_asex 
-
-merged_data_clonerate <- bind_rows(filtered_all, filtered_sex, filtered_asex)
-
-
-
-
-
-# Define colors for encircling
-encircle_colors <- c("Mixed population" = "blue", 
-                     "Sexual reproduction" = "green", 
-                     "Asexual reproduction" = "purple")
-
-encircle_fills <- c("Mixed population" = alpha("lightblue", 0.3), 
-                    "Sexual reproduction" = alpha("lightgreen", 0.3), 
-                    "Asexual reproduction" = alpha("violet", 0.3))
-
-# Ternary plot
-ternary_plot <- ggtern(data = merged_data_clonerate, 
-                       aes(x = Selfing_rate, 
-                           y = Outcrossing_rate, 
-                           z = Rate_of_clonality, 
-                           color = Posterior_probability, 
-                           shape = Dataset)) +  
-
-  # Plot points with different shapes for datasets
-  geom_point(size = 3, alpha = 0.7) +  
-
-  # Encircle each dataset separately
-  geom_encircle(data = filtered_all, 
-                aes(x = Selfing_rate, y = Outcrossing_rate), 
-                color = encircle_colors["Mixed population"], 
-                fill = encircle_fills["Mixed population"], size = 1) +
-
-  geom_encircle(data = filtered_sex, 
-                aes(x = Selfing_rate, y = Outcrossing_rate), 
-                color = encircle_colors["Sexual reproduction"], 
-                fill = encircle_fills["Sexual reproduction"], size = 1) +
-
-  geom_encircle(data = filtered_asex, 
-                aes(x = Selfing_rate, y = Outcrossing_rate), 
-                color = encircle_colors["Asexual reproduction"], 
-                fill = encircle_fills["Asexual reproduction"], size = 1) +
-
-  # Unified color scale for Posterior Probability
-  scale_color_gradient(low = "yellow", high = "red", 
-                       limits = c(min(merged_data_clonerate$Posterior_probability), 
-                                  max(merged_data_clonerate$Posterior_probability))) +
-
-  # Axis labels and formatting
-  theme_classic() +
-  theme_legend_position('tr') +  # Move legend to top-right
-  labs(
-       x = "Rate of selfing",
-       y = "Rate of outcrossing",
-       z = "Rate of clonality",
-       color = "Posterior Probability",
-       shape = "Dataset") +  # Legend for dataset types
-
-  # Axis customization
-  scale_T_continuous(breaks = seq(0, 1, by = 0.1), labels = seq(0, 1, by = 0.1)) +  
-  scale_L_continuous(breaks = seq(0, 1, by = 0.1), labels = seq(0, 1, by = 0.1)) +  
-  scale_R_continuous(breaks = seq(0, 1, by = 0.1), labels = seq(0, 1, by = 0.1)) +  
-  theme_showarrows()  # Keep axis arrows
-
-# Print the plot
-print(ternary_plot)
-
-
-
-
-
-# View results
-
-
-credible_intervals <- merged_data %>%
-    group_by(Dataset) %>%
-    summarise(
-        Lower_98CI = quantile(Posterior_probability, 0.01, na.rm = TRUE),  # 1st percentile
-        Upper_98CI = quantile(Posterior_probability, 0.99, na.rm = TRUE),  # 99th percentile
-        Max_Posterior = max(Posterior_probability, na.rm = TRUE),  # Maximum posterior probability
-        Median_Selfing = median(Selfing_rate, na.rm = TRUE),
-        Median_Outcrossing = median(Outcrossing_rate, na.rm = TRUE),
-        Median_Clonality = median(Rate_of_clonality, na.rm = TRUE)
-    )
-
-ci(clonest_results_france_sex$Posterior_probability, ci = c(0.90, 0.98, 0.99))
-
-print(credible_intervals)
-
-```
-
-
-
 
 ## Abundance of diffrent asexual lineages 
 
@@ -1763,11 +1457,21 @@ mll_color_mapping <- c(
   "3" = npg_colors[5],
   "4" = npg_colors[2],
   "6" = npg_colors[7],
-  "Other MLLs" = "grey",  
+  "Other MLLs" = npg_colors[10],  
   "8" = npg_colors[8],  
   "9" = npg_colors[9]
 )
 
+mll_color_mapping <- c(
+  "1" = npg_colors[3],
+  "2" = npg_colors[4],
+  "3" = npg_colors[5],
+  "4" = npg_colors[2],
+  "6" = npg_colors[7],
+  "5" = npg_colors[10],  #  it's sexual lineage
+  "8" = npg_colors[8],  
+  "9" = npg_colors[9]
+)
 
 
 asexual_lineages_years <- dat1 %>%
@@ -1777,7 +1481,7 @@ asexual_lineages_years <- dat1 %>%
   summarise(n = n(), .groups = "drop") # Summarize the counts
 
 
-# Bar plot of isolates by Location and MLL
+# Bar plot (Location and MLL)
 mll_years<- ggplot(asexual_lineages_years, aes(x = Year, y = n, fill = as.factor(MLL))) +
   geom_bar(stat = "identity", position = "stack") +
   labs(
@@ -1787,17 +1491,16 @@ mll_years<- ggplot(asexual_lineages_years, aes(x = Year, y = n, fill = as.factor
   ) +
   scale_fill_manual(values = mll_color_mapping) +
   theme(
-    # Set Times New Roman font globally
-    text = element_text(family = "Times New Roman", size = 12), # Global font settings
-    plot.title = element_text(size = 16, face = "bold", hjust = 0.5), # Customize title
+    text = element_text(family = "Times New Roman", size = 12), 
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
     axis.title = element_text(size = 14, face = "bold"), 
     axis.text = element_text(size = 15, color = "black"), 
     legend.title = element_text(size = 14, face = "bold"), 
     legend.text = element_text(size = 15), 
     panel.background = element_rect(fill = "transparent"), # Transparent panel background
-    plot.background = element_rect(fill = "transparent", color = NA), # Transparent plot background
-    panel.grid.major = element_blank(), # Remove major gridlines
-    panel.grid.minor = element_blank(), # Remove minor gridlines
+    plot.background = element_rect(fill = "transparent", color = NA), 
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(), 
     legend.background = element_rect(fill = "transparent"), # Transparent legend background
     legend.box.background = element_rect(fill = "transparent") # Transparent legend panel
   )
@@ -1819,7 +1522,7 @@ asexual_lineages_locations <- dat1 %>%
 
 
 
-# Bar plot of isolates by Location and MLL
+# Bar plot ( Location and MLL)
 mll_locations <- ggplot(asexual_lineages_locations, aes(x = n, y = Location, fill = as.factor(MLL))) +
   geom_bar(stat = "identity", position = "stack") +
   labs(
@@ -1868,7 +1571,7 @@ ggsave("asex_mll_Year_Locations.png", combined_plot, width = 15, height = 8, dpi
 ```
 
 
-## Fisher's exact test for each MLL and Year
+## Fisher's exact test for each asexual MLL and Year
 
 ```{r}
 asexual_lineages_years <- dat1 %>%
@@ -1916,210 +1619,3 @@ print(fisher_result_locations_mll)
 ```
 
 
-
-## Population genetic indices for individual (Sex by clustering and Asex by resampling)
-
-```{r, echo=FALSE}
-
-
-genotype_data <- genotype_data %>%
-  mutate(edge_status = case_when(
-    assignment == "Sex" & Mll_persistence == "Sex" ~ "Sex",  # Both are Sex
-    assignment == "Asex" & Mll_persistence == "Asex" ~ "Asex",  # Both are Asex
-    assignment == "Sex" & Mll_persistence == "Asex" ~ "Asex_mll",  # Assignment is Sex, MLL is Asex
-    assignment == "Asex" & Mll_persistence == "Sex" ~ "Asex_assignment"  # Assignment is Asex, MLL is Sex
-  ))
-
-
-
-
-# Convert to genind object
-final_GenInd <- df2genind(
-  X = genotype_mlp,   #data.frame containing allele data only 
-  sep = NULL,
-  ncode = 3,           #an optional integer giving the number of characters used for coding one genotype at one locus.
-  ind.names = rownames(genotype_mlp),  # individuals names
-  loc.names = colnames(genotype_mlp),  # markers names
-  pop = genotype_data$edge_status,                       # giving the population of each individual
-  NA.char = "999",                      # string corresponding to missing allele 999 or 999999
-  ploidy = 2,
-  type = "codom",                       #codom' stands for 'codominant' (e.g. microstallites, allozymes)
-  strata = NULL,
-  hierarchy = NULL,
-  check.ploidy = getOption("adegenet.check.ploidy")
-)
-
-
-Nb_Pop = length(levels(final_GenInd@pop))
-
-# Attribution des différents vecteurs que l'on souhaite calculer
-N <- vector(mode ="integer", length = Nb_Pop)
-GsurN<- vector(mode ="numeric", length = Nb_Pop)
-Ho <- vector(mode ="numeric", length = Nb_Pop)
-Hs <- vector(mode ="numeric", length = Nb_Pop)
-Fis <- vector(mode ="numeric", length = Nb_Pop)
-rbarD<- vector(mode ="numeric", length = Nb_Pop)
-Fis_sd <- vector(mode ="numeric", length = Nb_Pop)
-
-Pop <- levels(final_GenInd$pop)
-
-## Utilisation de Poppr pour récupérer les premiers indices N, G/N et rbarD
-Table_PPR <- poppr(final_GenInd) # marche bien
-
-rbarD <- Table_PPR$rbarD[1:Nb_Pop]
-N <- Table_PPR$N[1:Nb_Pop]
-GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
-
-#calcul de la proba de DL
-ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
-for (i in 1:Nb_Pop) {
-  Temp_Sample <- popsub(final_GenInd, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] # Attention c'est assez long à tourner 
-}
-
-
-## Utilisation de Fstat pour calculer les autres indices HO, HE, Fis et Ar
-
-data_Fstat <-genind2hierfstat(final_GenInd)
-
-# Boucles qui permet de calculer les indices souhaités pour chaque population (et pas la globalité)
-a =0
-for (i in levels(data_Fstat$pop) ){
-  Poptmp <- final_GenInd[which(final_GenInd$pop==i),]
-  #Poptmp  <-genind2hierfstat(Poptmp)
-  fstat_basic_Temporel <- basic.stats(Poptmp)
-  a = a+1
-  Ho[a]<-fstat_basic_Temporel$overall["Ho"]  
-  Hs[a]<-fstat_basic_Temporel$overall["Hs"]  
-  Fis[a]<-fstat_basic_Temporel$overall["Fis"] 
-  Fis_sd[a]<- sd(fstat_basic_Temporel$perloc$Fis)
-}
-
-# calcul de la richess allélique
-Obj_Ar <- allelic.richness(data_Fstat[which(data_Fstat[,"pop"]!="NA"),])
-Ar_per_loc <- Obj_Ar$Ar
-#Ar_per_loc <- Ar_per_loc[c(1:2, 4:13, 15:23),] # pour sortir les locus 100 et 26 qui sont absents de certaines pops
-Ar<- vector(mode ="numeric", length = Nb_Pop)
-for (i in 1:Nb_Pop){ 
-  Ar[i] = mean(Ar_per_loc[,i])
-}
-
-## Mise en forme du tableau final
-Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis, rbarD,Fis_sd)
-colnames(Tab_Indices_per_pop) <- Pop
-Tab_Indices_per_pop <- t(Tab_Indices_per_pop)
-kable(Tab_Indices_per_pop, digits = 3)
-
-
-
-
-```
-
-
-
-## Minimum Spanning Network (MSNs) 
-```{r}
-
-# Subset genind object for a specific lineage (replace "Target_Lineage" with the lineage name)
-specific_lineage <- genotype_data %>% filter (organised_MLL == "1") 
-# Select columns with "Mlp" in the name and the first column as isolate id
-genotype_cols_mll_1 <- c(grep("Mlp", names(specific_lineage), value = TRUE))
-genotype_mll_1 <- specific_lineage[, genotype_cols_mll_1]
-
-#make isolate id as column names 
-rownames(genotype_mll_1) <- rownames(specific_lineage)
-
-
-
-# Convert to genind object
-specific_lineage_genind <- df2genind(
-  X = genotype_mll_1,   #data.frame containing allele data only 
-  sep = NULL,
-  ncode = 3,           #an optional integer giving the number of characters used for coding one genotype at one locus.
-  ind.names = rownames(genotype_mll_1),  # individuals names
-  loc.names = colnames(genotype_mll_1),  # markers names
-  pop = specific_lineage$Year,                       # giving the population of each individual
-  NA.char = "999",                      # string corresponding to missing allele 999 or 999999
-  ploidy = 2,
-  type = "codom",                       #codom' stands for 'codominant' (e.g. microstallites, allozymes)
-  strata = NULL,
-  hierarchy = NULL,
-  check.ploidy = getOption("adegenet.check.ploidy")
-)
-
-# Compute genetic distance matrix
-dist_matrix <- diss.dist(specific_lineage_genind)
-
-# Generate Minimum Spanning Network
-msn <- poppr.msn(specific_lineage_genind, dist_matrix,
-                 vertex.label=NA
-                 )
-
-#plot_poppr_msn(specific_lineage_genind,msn, node.size = 5, edge.width = 2,inds = "n", nodescale = 1.5,  palette = viridis::viridis)
-
-png("MSN_plot.png", width = 1200, height = 900, res = 300)
-plot_poppr_msn(specific_lineage_genind,msn,inds = "n", nodescale = 1.5,  palette = viridis::viridis)
-dev.off()
-
-
-```
-
-
-
-
-
-##Rcolne
-
-```{r}
-# Creat data for Rclone
-
- # Creat data fit with Rclone
- # Create data fit with Rclone
- # extract specific MLL data
-  MLL_1_data <- genotype_data[genotype_data$organised_MLL == 1, ]
- 
- #extract mlp data
- genotype_mlp_mll_1 <- MLL_1_data[, grep("Mlp", names(MLL_1_data), value = TRUE)]
- 
- # Function to split alleles and pad with leading zeros if necessary
- split_alleles <- function(genotype) {
-   # Split each genotype into two alleles
-   allele1 <- substr(genotype, 1, 3)
-   allele2 <- substr(genotype, 4, 6)
-   
-   # Pad with leading zeros if necessary
-   allele1 <- sprintf("%03d", as.numeric(allele1))
-   allele2 <- sprintf("%03d", as.numeric(allele2))
-   
-   return(c(allele1, allele2))
- }
- 
- # Apply the function to each column and create new columns for alleles
- Rcolne_mlp_data <- genotype_mlp_mll_1 %>%
-   rowwise() %>%
-   mutate(across(everything(), ~ list(split_alleles(.x)))) %>%
-   unnest_wider(everything(), names_sep = ".")
- 
- # Rename columns to include .a and .b suffixes
- colnames(Rcolne_mlp_data) <- gsub("\\.1", "_1", colnames(Rcolne_mlp_data))
- colnames(Rcolne_mlp_data) <- gsub("\\.2", "_2", colnames(Rcolne_mlp_data))
- 
- # Add row names back
- rownames(Rcolne_mlp_data) <- rownames(genotype_mlp_mll_1)
- 
- Rcolne_mlp_data <- as.data.frame (Rcolne_mlp_data)
- 
- 
- Rcolne_mlp_data <- MST_data[,-1:-6]
- 
- #res <- genet_dist(Rcolne_mlp_data, manh = TRUE, graph = TRUE,manh_w=TRUE, )
- 
- #kinship_Loiselle_mlp <- kinship_Loiselle(Rcolne_mlp_data, haploid = FALSE, vecpop = NULL)
- #print(kinship_Loiselle_mlp)
- 
- #kinship_Ritland_mlp <- kinship_Ritland(Rcolne_mlp_data, haploid = FALSE, vecpop = NULL)
- 
-Pareto_index(Rcolne_mlp_data, vecpop = NULL, listMLL = NULL, full = FALSE, graph = FALSE, 
-				legends = 1, export = FALSE)
-
-```

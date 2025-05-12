@@ -18,7 +18,7 @@ date: "`r Sys.Date()`"
 
 required_packages <- c("knitr","ggplot2","readxl","tidyverse","genepop","hierfstat","here","mapdata",
                        "mapplots","data.table","grDevices","colorspace","adegenet","poppr","pegas","ape","cowplot",
-                       "ade4","remotes","ggtree","ggtreeExtra","viridis","factoextra","openxlsx","ggrepel","RClone","ggsci","scales","lme4","RColorBrewer","VennDiagram")    
+                       "ade4","remotes","ggtreeExtra","viridis","factoextra","openxlsx","ggrepel","RClone","ggsci","scales","lme4","dplyr")    
 for (package in required_packages) {
   if (package %in% row.names(installed.packages())) {
     library(package, character.only = TRUE)
@@ -26,6 +26,18 @@ for (package in required_packages) {
     install.packages(package)
     library(package, character.only = TRUE)
   }
+}
+
+# ggtree
+if (!require("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+
+if (!require("ggtree", character.only = TRUE)) {
+  BiocManager::install("ggtree")
+  library(ggtree)
+} else {
+  library(ggtree)
 }
 
 ```
@@ -42,11 +54,11 @@ path <- dirname(rstudioapi::getSourceEditorContext()$path)
 setwd(path)
 
 # check the current working directory
-#getwd()
+getwd()
 
 
 # import the data within specified sheet
-general_data <- read_excel("mlp_ssr_data.xlsx")
+general_data <- read_excel("Table_S1_data.xlsx")
 
 # covert data to data frame
 general_data <- as.data.frame(general_data) 
@@ -129,7 +141,6 @@ genotype_data$MLL <- mll_assignments
 
 ### Ascending order for fixation of MLL
 
-The idea to sort the MLLs in ascending order is to fix the order of the MLLs in the dataset. This will help in further analysis and visualization of the data. The MLLs are sorted based on the frequency of their occurrence in the dataset. The sorted MLLs are then added to the genotype data table as a new column called "organised_MLL".
 
 ```{r}
 # Calculate the frequency of each MLL combination
@@ -239,13 +250,19 @@ cluster_assignments <- ggplot(melted_data, aes(x = Cluster, y = Probability, col
   xlab("Genotypic clusters") +
   ylab("Cluster probability") +
   labs(color = "Clusters") +
-  theme(text = element_text(family = "Times New Roman", size = 12) # Global font settings
-) +
-  geom_text_repel()  # to avoid overlapping labels
+  theme_minimal(base_family = "Times New Roman", base_size = 12) +  
+  theme(
+    panel.background = element_rect(fill = "transparent", color = NA),  
+    plot.background = element_rect(fill = "transparent", color = NA),   
+    legend.background = element_rect(fill = "transparent"),             
+    legend.key = element_rect(fill = "transparent")                     
+  ) +
+geom_text_repel() # to avoid overlapping labels
+  
 
 cluster_assignments
 
-ggsave("cluster_assignments.png", cluster_assignments, width = 8, height = 6, dpi = 300, bg = "transparent")  
+ggsave("cluster_assignments.png", cluster_assignments, width = 8, height = 6, dpi = 1200, bg = "transparent")  
 
 
 #reomve uncertin cluster
@@ -553,7 +570,7 @@ GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   Temp_Sample <- popsub(final_GenInd, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] # Attention c'est assez long à tourner 
+  ProbaLD[i] = ia(Temp_Sample, sample = 9, plot = F)[4] # Attention c'est assez long à tourner 
 }
 
 
@@ -673,7 +690,7 @@ GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   Temp_Sample <- popsub(final_GenInd, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] 
+  ProbaLD[i] = ia(Temp_Sample, sample = 9, plot = F)[4] 
 }
 
 
@@ -969,11 +986,9 @@ groupInfo <- split(rownames(genotype_data), genotype_data$Reproduction)
 
 # Group the tree labels based on the group information
 tree <- groupOTU(tree2, groupInfo)
-npg_colors <- brewer.pal(10, "Paired") # Extract NPG colors, 8 colors for top 8 MLLs later
+npg_colors <- pal_npg("nrc", alpha = 0.9)(9)
 
-
-reproduction_colors <- c("Asex" = npg_colors[6], "Sex" = npg_colors[2])
-
+reproduction_colors <- c("Asex" = npg_colors[8], "Sex" = npg_colors[2])
 
 # Create circular plot
 options(ignore.negative.edge=TRUE)
@@ -1001,7 +1016,6 @@ dat1 <- data.frame(
   Group = genotype_data$Reproduction,
   Year = as.factor(genotype_data$Year),
   Location = genotype_data$Region
-
 )
 
 # Filter dat1 to include MLLs
@@ -1012,14 +1026,14 @@ dat1_filtered$Year <- as.character(dat1_filtered$Year)
 
 # Manually define the color mapping
 mll_color_mapping <- c(
-  "1" = npg_colors[3],
-  "2" = npg_colors[4],
-  "3" = npg_colors[5],
-  "4" = npg_colors[1],
-  "6" = npg_colors[7],
-  "5" = npg_colors[10],  #  it's sexual lineage
-  "8" = npg_colors[8],  
-  "9" = npg_colors[9]
+  "1" = npg_colors[7],
+  "2" = npg_colors[5],
+  "3" = npg_colors[9],
+  "4" = npg_colors[4],
+  "6" = npg_colors[1],
+  "5" = "grey" , #  it's sexual lineage
+  "8" = npg_colors[3],  
+  "9" = npg_colors[6]
 )
 
 
@@ -1040,11 +1054,11 @@ p2 <- p +
     axis.params = list(
       axis = "x",  
       text.angle = -90,  
-      text.size = 3.4,
+      text.size = 3.2,
       vjust = -0.2,
       line.alpha = 0,
     ),
-    grid.params = list(color = "black", linetype = 5, size = 0.1, alpha = 0.6)  # Add grid lines
+    grid.params = list(color = "black", linetype = 5, size = 0.1, alpha = 0.7)  # Add grid lines
   ) +
   scale_fill_manual(values = mll_color_mapping) +
    # Customize the color gradient
@@ -1061,16 +1075,15 @@ p2 <- p +
   ) 
 
 # Modify legend titles
-p2 <- p2 +
-  labs(fill = "MLL", color = "Reproduction") 
+p2 <- p2 + scale_fill_manual(values = mll_color_mapping, drop = FALSE)
 
 p2
 
 
 
-ggsave("tree_plot1.png", p, width = 17, height = 8, dpi = 600, bg = "transparent")  # Save the plot
+ggsave("tree_plot1.png", p, width = 17, height = 8, dpi = 1200, bg = "transparent")  
 
-ggsave("tree_plot2.png", p2, width = 17, height = 8, dpi = 600, bg = "transparent")  # Save the 
+ggsave("tree_plot2.png", p2, width = 12, height = 9, dpi = 1200, bg = "transparent")  
 
 ```
 
@@ -1095,33 +1108,30 @@ pop_data <- genotype_data %>%
   group_by(Pop, Long, Lat, Reproduction) %>%
   summarize(n = n(), .groups = "drop") %>%  
   mutate(percent = n / sum(n)) %>%
-  select(Pop, Long, Lat, Reproduction, n, percent)
+  dplyr::select(Pop, Long, Lat, Reproduction, n, percent)
 
 
 #draw map 
-# The area of the France Region
-xlim <- c(-4.3,9.1)
-ylim <- c(41, 51)
 
 # Creates an xyz object for use with the function draw.pie
 xyz <- make.xyz(pop_data$Long, pop_data$Lat, pop_data$percent, pop_data$Reproduction)
 
 # Create a named vector for profile colors
-profile_color_mapping <- c("Asex" = npg_colors[6], "Sex" = npg_colors[2])
+profile_color_mapping <- c("Asex" = npg_colors[8], "Sex" = npg_colors[2])
 transparent_colors <- adjustcolor(profile_color_mapping, alpha.f = 0.7)
 
 
 # The plot of the pie chart above the map
-png(filename = "map_output.png", width = 1000, height = 800, bg = "transparent")
+png(filename = "map_all_years.png", units="cm", width = 18, height = 15, res = 1200, bg = "transparent")
 
-par(mai = c(0.5, 0.5, 0.35, 0.2), omi = c(0.25, 0.5, 0, 0),
-    mgp = c(2.5, 0.5, 0), family = "Times New Roman",col = "black")
-basemap(xlim = c(-4.3, 9.1), ylim = c(41, 51), bg = "transparent",
-        main = "Distribution of population of poplar rust in France", col.main="white", cex.main = 1.6)
-map("france", fill = FALSE, col = "black", xlim = xlim, ylim = ylim, add = TRUE)
-final_map <- draw.pie(xyz$x, xyz$y, xyz$z, radius = 0.3, col = transparent_colors)
 
-legend(-4.5, 45, legend = c("Asex", "Sex"), fill = transparent_colors, bty = "n", cex = 2, ncol = 1, text.col = "black")
+par(mai = c(0, 0, 0, 0), omi = c(0, 0, 0, 0), 
+    mgp = c(2.5, 0.5, 0))
+basemap(xlim = c(-4.3, 9.1), ylim = c(41, 51), bg = "transparent", axes=FALSE)
+map("france", fill = FALSE, col = "black", add = FALSE)
+final_map <- draw.pie(xyz$x, xyz$y, xyz$z, radius = 0.3, col = transparent_colors) # par size ref
+
+legend(-5, 45, legend = c("Asex", "Sex"), fill = transparent_colors, bty = "n", cex = 1, ncol = 1, text.col = "black")
 
 #view the map 
 
@@ -1141,40 +1151,32 @@ dev.off()
 pop_data <- genotype_data %>%
   filter(Year == c("2009","2011")) %>% 
   group_by(Pop, Long, Lat, Reproduction) %>%
-  summarize(n = n(), .groups = "drop") %>%   
-  select(Pop, Long, Lat, Reproduction, n, percent)
+  summarize(n = n(), .groups = "drop") %>%  
+  mutate(percent = n / sum(n)) %>%
+  dplyr::select(Pop, Long, Lat, Reproduction, n, percent)
 
 
-#draw map Representative the popular individual across France map within reproductive mode
-# The area of the France Region;
-xlim <- c(-4.3,9.1)
-ylim <- c(41, 51)
+#draw map representative the popular individual across France map within reproductive mode
 
 # Creates an xyz object for use with the function draw.pie
 xyz <- make.xyz(pop_data$Long, pop_data$Lat, pop_data$percent, pop_data$Reproduction)
 
 
-# Create a named vector to map profiles to colors
-#profile_color_mapping <- setNames(my_colors, unique_profiles)
-
 # Create a named vector for profile colors
-profile_color_mapping <- c("Asex" = npg_colors[6], "Sex" = npg_colors[2])
+profile_color_mapping <- c("Asex" = npg_colors[8], "Sex" = npg_colors[2])
 transparent_colors <- adjustcolor(profile_color_mapping, alpha.f = 0.7)
 
 
 # The plot of the pie chart above the map
-png(filename = "map_2009_2011_output.png", width = 1000, height = 800, bg = "transparent")
+png(filename = "map_2009_2011.png",units="cm", width = 18, height = 15, res = 1200, bg = "transparent")
 
-par(mai = c(0.5, 0.5, 0.35, 0.2), omi = c(0.25, 0.5, 0, 0),
-    mgp = c(2.5, 0.5, 0), family = "Times New Roman",col = "black")
-basemap(xlim = c(-4.3, 9.1), ylim = c(41, 51), bg = "transparent",
-        col.main="white", cex.main = 1.6)
-map("france", fill = FALSE, col = "black", xlim = xlim, ylim = ylim, add = TRUE)
-final_map <- draw.pie(xyz$x, xyz$y, xyz$z, radius = 0.3, col = transparent_colors)
+par(mai = c(0, 0, 0, 0), bty = "n")
+basemap(xlim = c(-4.3, 9.1), ylim = c(41, 51), bg = "transparent", axes=FALSE)
+map("france", fill = FALSE, col = "black", add = TRUE)
 
-legend(-5, 45, legend = c("Asex", "Sex"), fill = transparent_colors, bty = "n", cex = 1.5, ncol = 1, text.col = "black")
+final_map <- draw.pie(xyz$x, xyz$y, xyz$z, radius = 0.3, col = transparent_colors) 
+legend(-5, 45, legend = c("Asex", "Sex"), fill = transparent_colors, bty = "n", cex = 1, ncol = 1, text.col = "black")
 
-#view the map 
 
 dev.off() 
 
@@ -1215,7 +1217,7 @@ aggregated_data <- genotype_data %>%
 # Create the final table
 final_table <- aggregated_data %>%
   select(Location, Long, Lat, Year, nbsex, nbAsex)
-
+#final_table<- mutate(final_table, Year = as.numeric(Year))
 # Fit the regression model
 regression <- glm(formula = cbind(nbsex, nbAsex) ~ Lat + Long + Year,
                   data = final_table,
@@ -1294,7 +1296,7 @@ p_lat_filtered <- ggplot(final_table_filtered, aes(x = Lat, y = nbsex / (nbsex +
 p_lat_filtered
 
 # Save the plot
-ggsave("effect_of_latitude_filtered.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 300)
+ggsave("effect_of_latitude_filtered.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 1200)
 
 
 
@@ -1327,25 +1329,41 @@ prediction_data_filtered$predicted_prob <- predict(
 
 # Plot the data points and GLMM prediction curve for Latitude
 p_lat_filtered <- ggplot(final_table_filtered, aes(x = Lat, y = nbsex / (nbsex + nbAsex))) +
-  geom_point(aes(size = nbsex + nbAsex), alpha = 0.5, shape = 16, color = "gray40") +  # Data points
-  geom_line(data = prediction_data_filtered, aes(x = Lat, y = predicted_prob, color = Year), 
-            linewidth = 1.2, alpha = 0.8) +  # Prediction lines by Year
+  # Data points (semi-transparent)
+  geom_point(aes(size = nbsex + nbAsex), alpha = 0.5, shape = 16, color = "gray40") +
+  # GLMM prediction curves (slightly more opaque for visibility)
+  geom_line(data = prediction_data_filtered, 
+            aes(x = Lat, y = predicted_prob, color = Year),
+            linewidth = 1.2, alpha = 0.8) +
+  # Labels and scales
   labs(
     x = "Latitude",
     y = "Proportion of sexual reproduction"
   ) +
-  scale_color_manual(values = c("2009" = npg_colors[3], "2011" = npg_colors[5])) +  
-  scale_size_continuous(range = c(2, 8), name = "Sample Size") +  
-  theme(text = element_text(family = "Times New Roman", size = 12)
-) +
+  scale_color_manual(values = c("2009" = npg_colors[3], "2011" = npg_colors[5])) +
+  scale_size_continuous(range = c(2, 8), name = "Sample Size") +
+  
+  # Theme settings for transparency and font
+  theme_minimal(base_size = 12, base_family = "Times New Roman") +
   theme(
+    text = element_text(family = "Times New Roman"),
     legend.position = "top",
+    legend.title = element_blank(),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    panel.grid.minor = element_blank(),
+    # Full transparency settings:
+    panel.background = element_rect(fill = "transparent", color = NA),
+    plot.background = element_rect(fill = "transparent", color = NA),
+    legend.background = element_rect(fill = "transparent"),
+    legend.key = element_rect(fill = "transparent")
   )
+
+
 
 p_lat_filtered
 
 # Optional: Save the plot
-ggsave("effect_of_latitude_glmm.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 300)
+ggsave("effect_of_latitude_glmm.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 1200)
 
 ```
 
@@ -1452,37 +1470,28 @@ write.table(MST_data, "MST_data_mlp_pop_as_Reproduction_for_cloneEstimate.txt", 
 
 # Manually define the color mapping
 mll_color_mapping <- c(
-  "1" = npg_colors[3],
-  "2" = npg_colors[4],
-  "3" = npg_colors[5],
-  "4" = npg_colors[2],
-  "6" = npg_colors[7],
-  "Other MLLs" = npg_colors[10],  
-  "8" = npg_colors[8],  
-  "9" = npg_colors[9]
+  "1" = npg_colors[7],
+  "2" = npg_colors[5],
+  "3" = npg_colors[9],
+  "4" = npg_colors[4],
+  "6" = npg_colors[1],
+  "Other MLLs " = npg_colors[10],  
+  "8" = npg_colors[3],  
+  "9" = npg_colors[6]
 )
 
-mll_color_mapping <- c(
-  "1" = npg_colors[3],
-  "2" = npg_colors[4],
-  "3" = npg_colors[5],
-  "4" = npg_colors[2],
-  "6" = npg_colors[7],
-  "5" = npg_colors[10],  #  it's sexual lineage
-  "8" = npg_colors[8],  
-  "9" = npg_colors[9]
-)
+
 
 
 asexual_lineages_years <- dat1 %>%
   filter(Group == "Asex") %>% # Filter only Asex lineages
-  mutate(MLL = ifelse(MLL %in% c(1,2,3,4,5,7,8), as.character(MLL), "Other MLLs")) %>% 
+  mutate(MLL = ifelse(MLL %in% c(1,2,3,4,6,8,9), as.character(MLL), "Other MLLs ")) %>% 
   group_by(Year,MLL) %>% # Group by Location and MLL
   summarise(n = n(), .groups = "drop") # Summarize the counts
 
 
 # Bar plot (Location and MLL)
-mll_years<- ggplot(asexual_lineages_years, aes(x = Year, y = n, fill = as.factor(MLL))) +
+mll_years <- ggplot(asexual_lineages_years, aes(x = Year, y = n, fill = as.factor(MLL))) +
   geom_bar(stat = "identity", position = "stack") +
   labs(
     x = "Year",
@@ -1491,23 +1500,19 @@ mll_years<- ggplot(asexual_lineages_years, aes(x = Year, y = n, fill = as.factor
   ) +
   scale_fill_manual(values = mll_color_mapping) +
   theme(
-    text = element_text(family = "Times New Roman", size = 12), 
-    plot.title = element_text(size = 16, face = "bold", hjust = 0.5), 
-    axis.title = element_text(size = 14, face = "bold"), 
-    axis.text = element_text(size = 15, color = "black"), 
-    legend.title = element_text(size = 14, face = "bold"), 
-    legend.text = element_text(size = 15), 
-    panel.background = element_rect(fill = "transparent"), # Transparent panel background
-    plot.background = element_rect(fill = "transparent", color = NA), 
-    panel.grid.major = element_blank(), 
-    panel.grid.minor = element_blank(), 
-    legend.background = element_rect(fill = "transparent"), # Transparent legend background
-    legend.box.background = element_rect(fill = "transparent") # Transparent legend panel
-  )
+    text = element_text(family = "Times New Roman", size = 12),
+    axis.title = element_text(size = 15, face = "bold"), 
+    axis.text = element_text(size = 14, color = "black"),  # Reduced from 15 for better balance
+    axis.text.x = element_text(angle = 0, hjust = 1),  # Improved x-axis label readability
+    panel.background = element_rect(fill = "transparent"),
+    plot.background = element_rect(fill = "transparent", color = NA),
+    panel.grid = element_blank(),
+    legend.background = element_rect(fill = "transparent")
+  ) + guides(fill = "none")  # Quick legend removal
 
 mll_years
 
-ggsave("asex_mll_Year.png", mll_years, width = 17, height = 8, dpi = 600, bg = "transparent")  # Save the plot with desired dimensions
+ggsave("asex_mll_Year.png", mll_years, width = 17, height = 8, dpi = 1200, bg = "transparent")  # Save the plot with desired dimensions
   
 
 
@@ -1516,7 +1521,7 @@ ggsave("asex_mll_Year.png", mll_years, width = 17, height = 8, dpi = 600, bg = "
 
 asexual_lineages_locations <- dat1 %>%
   filter(Group == "Asex") %>% # Filter only Asex lineages
-  mutate(MLL = ifelse(MLL %in% c(1,2,3,4,6,8,9), as.character(MLL), "Other MLLs")) %>% 
+  mutate(MLL = ifelse(MLL %in% c(1,2,3,4,6,8,9), as.character(MLL), "Other MLLs ")) %>% 
   group_by(Location,MLL) %>% # Group by Location and MLL
   summarise(n = n(), .groups = "drop") # Summarize the counts
 
@@ -1532,40 +1537,43 @@ mll_locations <- ggplot(asexual_lineages_locations, aes(x = n, y = Location, fil
   ) +
   scale_fill_manual(values = mll_color_mapping) +
   theme(
-    # Set Times New Roman font globally
-    text = element_text(family = "Times New Roman", size = 12), # Global font settings
-    plot.title = element_text(size = 16, face = "bold", hjust = 0.5), # Customize title
-    axis.title = element_text(size = 14, face = "bold"), 
-    axis.text = element_text(size = 15, color = "black"), 
-    legend.title = element_text(size = 14, face = "bold"), 
-    legend.text = element_text(size = 15), 
-    panel.background = element_rect(fill = "transparent"), # Transparent panel background
-    plot.background = element_rect(fill = "transparent", color = NA), # Transparent plot background
-    panel.grid.major = element_blank(), # Remove major gridlines
-    panel.grid.minor = element_blank(), # Remove minor gridlines
-    legend.background = element_rect(fill = "transparent"), # Transparent legend background
-    legend.box.background = element_rect(fill = "transparent") # Transparent legend panel
-  )
+    text = element_text(family = "Times New Roman", size = 12),
+    axis.title = element_text(size = 15, face = "bold"), 
+    axis.text = element_text(size = 14, color = "black"),  # Slightly reduced from 15 for better fit
+    legend.title = element_text(size = 14, face = "bold", margin = margin(r = 20)), 
+    legend.text = element_text(size = 12),  # Removed bold from legend text for cleaner look
+    legend.position = "top",
+    legend.direction = "horizontal",
+    legend.box = "horizontal",
+    legend.spacing.x = unit(0.2, "cm"),  # Added spacing between legend items
+    legend.key.size = unit(0.5, "cm"),  # Adjusted legend key size
+    panel.background = element_rect(fill = "transparent"),
+    plot.background = element_rect(fill = "transparent", color = NA),
+    panel.grid = element_blank(),
+    legend.background = element_rect(fill = "transparent")
+  ) +
+  guides(fill = guide_legend(nrow = 1, override.aes = list(size = 4)))  # Forces single row
 
 mll_locations
 
-ggsave("asex_mll_Locations.png", mll_locations, width = 17, height = 8, dpi = 600, bg = "transparent")  # Save the plot with desired dimensions
+ggsave("asex_mll_Locations.png", mll_locations, width = 17, height = 8, dpi = 1200, bg = "transparent")  # Save the plot with desired dimensions
   
 
 
 
 # Add a title to the combined plot
 combined_plot <- plot_grid(
-  mll_locations,mll_years,
+  mll_locations, 
+  mll_years,
   ncol = 1,
   labels = c("A", "B"),
-  label_size = 15
-) +
-  theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold",family = "Times New Roman"))
+  label_size = 15,
+  align = "v"
+) 
 
 combined_plot
 
-ggsave("asex_mll_Year_Locations.png", combined_plot, width = 15, height = 8, dpi = 600, bg = "transparent")  # Save the plot with desired dimensions
+ggsave("asex_mll_Year_Locations.png", combined_plot, width = 10, height = 8, dpi = 1200, bg = "transparent")  # Save the plot with desired dimensions
 
 
 ```

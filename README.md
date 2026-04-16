@@ -11,7 +11,7 @@ Ammar Abdalrahem, Axelle Andrieux, Ronan Becheler, Sébastien Duplessis, Pascal 
 
 ## What the Code Does
 
-1. **Data loading** — Reads isolate metadata and microsatellite genotypes from `Table_S1_data.tsv`
+1. **Data loading** — Reads isolate metadata and microsatellite genotypes from `Table_data.tsv`
 2. **MLG/MLL definition** — Defines multilocus genotypes and multilocus lineages using distance-based thresholding (`poppr`)
 3. **Clustering** — Assigns isolates to genetic clusters via K-means + DAPC (`adegenet`); removes uncertain assignments (<80% posterior probability)
 4. **Reproductive mode inference** — Classifies isolates as **asexual** or **sexual** using two approaches:

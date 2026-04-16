@@ -90,7 +90,3 @@ rmarkdown::render("data_analysis_mlp.Rmd")
 | `effect_of_latitude_*.png` | Regression plots |
 
 ---
-
-## Author
-
-**Ammar Abdalrahem**

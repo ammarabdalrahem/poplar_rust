@@ -12,35 +12,33 @@
 #' 
 #' 
 #' ## Installation of required packages
-#' 
-## ----include=FALSE-------------------------------------------------------------------------------------
-#Code to install packages if necessary, and read them with library function
 
-required_packages <- c("knitr","ggplot2","readxl","tidyverse","genepop","hierfstat","mapdata",
-                       "mapplots","grDevices","adegenet","poppr","pegas","ape","cowplot",
-                       "ade4","ggtreeExtra","viridis","ggrepel","RClone","ggsci","scales","lme4","dplyr","factoextra","sf","rnaturalearth","rnaturalearthdata","dplyr","grid")    
+# ── Set CRAN mirror (required for terminal/non-interactive use) ───────────────
+options(repos = c(CRAN = "https://cloud.r-project.org"))
 
+# ── CRAN packages ─────────────────────────────────────────────────────────────
+cran_packages <- c(
+  "knitr", "ggplot2", "readxl", "tidyverse", "genepop", "hierfstat",
+  "mapdata", "mapplots", "grDevices", "adegenet", "poppr", "pegas",
+  "ape", "cowplot", "ade4", "viridis", "ggrepel", "RClone", "ggsci",
+  "scales", "lme4", "dplyr", "factoextra", "sf", "rnaturalearth",
+  "rnaturalearthdata", "grid", "svglite", "BiocManager"
+)
 
-for (package in required_packages) {
-  if (package %in% row.names(installed.packages())) {
-    library(package, character.only = TRUE)
-  } else {
-    install.packages(package)
-    library(package, character.only = TRUE)
-  }
+missing_cran <- cran_packages[!(cran_packages %in% installed.packages()[, "Package"])]
+if (length(missing_cran) > 0) {
+  install.packages(missing_cran)
 }
+invisible(lapply(cran_packages, library, character.only = TRUE))
 
-# ggtree
-if (!require("BiocManager", quietly = TRUE)) {
-  install.packages("BiocManager")
-}
+# ── Bioconductor packages ─────────────────────────────────────────────────────
+bioc_packages <- c("ggtree", "ggtreeExtra")
 
-if (!require("ggtree", character.only = TRUE)) {
-  BiocManager::install("ggtree")
-  library(ggtree)
-} else {
-  library(ggtree)
+missing_bioc <- bioc_packages[!(bioc_packages %in% installed.packages()[, "Package"])]
+if (length(missing_bioc) > 0) {
+  BiocManager::install(missing_bioc, ask = FALSE, update = FALSE)
 }
+invisible(lapply(bioc_packages, library, character.only = TRUE))
 
 
 #' 

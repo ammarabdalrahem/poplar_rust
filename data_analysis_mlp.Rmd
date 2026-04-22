@@ -16,9 +16,11 @@ date: "`r Sys.Date()`"
 ```{r, include=FALSE}
 #Code to install packages if necessary, and read them with library function
 
-required_packages <- c("knitr","ggplot2","readxl","tidyverse","genepop","hierfstat","here","mapdata",
-                       "mapplots","data.table","grDevices","colorspace","adegenet","poppr","pegas","ape","cowplot",
-                       "ade4","remotes","ggtreeExtra","viridis","factoextra","openxlsx","ggrepel","RClone","ggsci","scales","lme4","dplyr")    
+required_packages <- c("knitr","ggplot2","readxl","tidyverse","genepop","hierfstat","mapdata",
+                       "mapplots","grDevices","adegenet","poppr","pegas","ape","cowplot",
+                       "ade4","ggtreeExtra","viridis","ggrepel","RClone","ggsci","scales","lme4","dplyr","factoextra","sf","rnaturalearth","rnaturalearthdata","dplyr","grid")    
+
+
 for (package in required_packages) {
   if (package %in% row.names(installed.packages())) {
     library(package, character.only = TRUE)
@@ -57,8 +59,8 @@ setwd(path)
 getwd()
 
 
-# import the data within specified sheet
-general_data <- read_excel("Table_S1_data.xlsx")
+# import the data from tsv
+general_data <- read_tsv("Table_data.tsv")
 
 # covert data to data frame
 general_data <- as.data.frame(general_data) 
@@ -66,10 +68,134 @@ general_data <- as.data.frame(general_data)
 # remove unknown population
 general_data <- general_data[!(general_data$Pop == "NA"), ]
 
+
 ```
 
 ```{r}
 head(general_data) 
+```
+
+## Figure shows the sample collections sites and stratigies
+
+```{r}
+
+# 1) Summarise isolates per site/year
+sampling_summary <- general_data %>%
+  group_by(Project, Site, Dept, Long, Lat, Year) %>%
+  summarise(n_isolates = n(), .groups = "drop") %>%
+  mutate(
+    Campaign = case_when(
+      Project == "Fr09" ~ "National survey 2009",
+      Project == "Fr11" ~ "National survey 2011",
+      Project %in% c("Dur04", "Dur08", "Dur20") ~ "Durance River valley monitoring",
+      Year == 2024 & grepl("Cavalaire", Site, ignore.case = TRUE) ~ "Cavalaire-sur-Mer (Feb 2024)",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(!is.na(Campaign))
+
+# Split: circles vs star
+pts <- sampling_summary %>% filter(Campaign != "Cavalaire-sur-Mer (Feb 2024)")
+cav <- sampling_summary %>%
+  filter(Campaign == "Cavalaire-sur-Mer (Feb 2024)") %>%
+  slice(1) %>%
+  mutate(StarLegend = "Cavalaire-sur-Mer (Feb 2024)")
+
+# 2) Map layers
+fr <- ne_countries(scale = "large", country = "France", returnclass = "sf")
+fr_depts <- ne_states(country = "France", returnclass = "sf")
+
+# 3) Palette
+cols <- c(
+  "National survey 2009" = "#2C7BB6",
+  "National survey 2011" = "#F29E4C",
+  "Durance River valley monitoring" = "#2A9D8F"
+)
+
+# 4) Plot
+p <- ggplot() +
+  geom_sf(data = fr, fill = "white", color = "black", linewidth = 0.35) +
+  geom_sf(data = fr_depts, fill = NA, color = "grey85", linewidth = 0.20) +
+
+  # Durance highlight
+  annotate("rect", xmin = 5.7, xmax = 6.7, ymin = 43.55, ymax = 44.15,
+           fill = "#2A9D8F", alpha = 0.18, color = NA) +
+
+  # Circles
+  geom_point(
+    data = pts,
+    aes(Long, Lat, fill = Campaign, size = n_isolates),
+    shape = 21, color = "black", stroke = 0.25, alpha = 0.95
+  ) +
+
+  # Cavalaire star + legend
+  geom_point(
+    data = cav,
+    aes(Long, Lat, shape = StarLegend),
+    color = "#B2182B", size = 4.8, stroke = 1
+  ) +
+
+  # Durance label + arrow
+  annotate("text", x = 7.35, y = 44.55, label = "Durance\nRiver valley",
+           size = 4.2, hjust = 0) +
+  annotate("segment", x = 7.20, xend = 6.35, y = 44.40, yend = 43.90,
+           arrow = arrow(length = unit(2, "mm")), linewidth = 0.6) +
+
+  # Cavalaire label + arrow (arrow points to the star coordinates)
+  annotate("text", x = 6.5, y = 42.85, label = "Cavalaire-\nsur-Mer",
+           size = 4.2, hjust = 0) +
+  annotate("segment",
+           x = 6.45, y = 42.78,
+           xend = cav$Long[1], yend = cav$Lat[1],
+           arrow = arrow(length = unit(2, "mm")),
+           linewidth = 0.6) +
+
+  # Scales
+  scale_fill_manual(values = cols, name = NULL) +
+  scale_shape_manual(values = c("Cavalaire-sur-Mer (Feb 2024)" = 8), name = NULL) +  # <-- FIX
+  scale_size_continuous(
+    name = "Size scale",
+    range = c(1.5, 7.0),
+    breaks = c(5, 20, 50),
+    labels = c("5 isolates", "20 isolates", "50+ isolates")
+  ) +
+
+  coord_sf(xlim = c(-5, 9.7), ylim = c(41.3, 51.6), expand = FALSE) +
+
+  guides(
+    size  = guide_legend(order = 1, override.aes = list(fill = "white", shape = 21, color = "black")),
+    fill  = guide_legend(order = 2, override.aes = list(size = 3, shape = 21, color = "black")),
+    shape = guide_legend(order = 3, override.aes = list(size = 4, color = "#B2182B"))
+  ) +
+
+  theme_void(base_size = 12) +
+  theme(
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.8),
+    legend.position = "right",
+    legend.box = "vertical",
+    legend.spacing.y = unit(3, "mm"),
+    legend.text  = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    plot.margin = margin(6, 40, 6, 6),
+    plot.title = element_text(size = 14)
+  ) +
+  labs(title = "A. Geographic distribution map")
+
+p
+
+# 5) Export for Inkscape + optional 1200 dpi PNG
+# Vector is best for Inkscape; DPI is only relevant for PNG (raster) [web:118][web:146].
+#ggsave("Fig1A_map.pdf", p, device = cairo_pdf,
+#       width = 190/25.4, height = 170/25.4)
+
+# Optional editable SVG (often very convenient in Inkscape)
+# install.packages("svglite")
+ggsave("Fig1A_map.svg", p, device = svglite::svglite,
+       width = 250, height = 190, units = "mm")
+
+
+
+
 ```
 
 ## The definition of MLLs
@@ -83,6 +209,11 @@ genotype_data <- general_data[, genotype_cols] #
 rownames(genotype_data) <- genotype_data[,1]
 # delete the first column not needed anymore
 genotype_data$Isolate = NULL
+
+# Remove all non-ASCII characters from individual names
+rownames(genotype_data) <- iconv(rownames(genotype_data), 
+                                  from = "UTF-8", to = "ASCII", sub = "")
+
 
 
 # Convert data to genind object
@@ -194,6 +325,7 @@ genotype_data <- genotype_data[order(genotype_data$organised_MLL),]
 genotype_cols <- c(grep("Mlp", names(genotype_data), value = TRUE))
 genotype_mlp <- genotype_data[, genotype_cols]
 
+
 # Make isolate id as column names 
 rownames(genotype_mlp) <- rownames(genotype_data)
 
@@ -214,25 +346,109 @@ data_GenInd <- df2genind(
 )
 
 
+# choose the best K
+X <- adegenet::tab(data_GenInd, freq = TRUE, NA.method = "mean")
 
-# First identification by cluster
+# 2) PCA to reduce dimension
+set.seed(123)
+
+pca <- prcomp(X, center = TRUE, scale. = FALSE)
+opt_pcs <- 10  # temporary fixed number of PCs to retain for clustering (can be optimized with xvalDapc later)
+scores <- pca$x[, 1:opt_pcs, drop = FALSE]
+
+# 3) Silhouette-based K selection on PCA scores
+# Define custom kmeans with higher iterations
+my_kmeans <- function(x, k) {
+  kmeans(x, k, iter.max = 100, nstart = 25)
+}
+
+fviz_nbclust(scores, my_kmeans, method = "silhouette", k.max = 20)
+
+# save the plot
+png("Silhouette_kmeans.png", width = 1200, height = 800, res = 150)
+# Plot silhouette results
+fviz_nbclust(scores, my_kmeans, method = "silhouette", k.max = 20)
+dev.off()
+
+# 4) find.clusters()
 
 grp <- find.clusters(data_GenInd, method = "kmeans", stat = "BIC", n.pca= 90 , n.clust= 2, n.iter=10000, n.start=100)
 cluster_assignments <- grp$grp # Assign the cluster assignments to a variable
 genotype_data$cluster <- cluster_assignments # Add the cluster assignments to the genotype data table
 
+
+# 5) Cross-validation to find optimal n.pca for DAPC 
+
+xval <- xvalDapc((X), grp$grp, n.pca.max = 90, training.set = 0.9, result = "groupMean", n.rep = 100)
+#print(xval)
+
+# Extract values from xval
+n_pcs_tested <- as.numeric(names(xval$`Mean Successful Assignment by Number of PCs of PCA`))
+mean_success  <- as.numeric(xval$`Mean Successful Assignment by Number of PCs of PCA`)
+opt_pcs       <- as.numeric(xval$`Number of PCs Achieving Highest Mean Success`)
+
+# Save plot of mean successful assignment vs number of PCs
+png("Dapc_xval.png", width = 1200, height = 800, res = 150)
+plot(n_pcs_tested, mean_success,
+     type = "b", pch = 19, col = "blue",
+     xlab = "Number of PCs",
+     ylab = "Mean Successful Assignment")
+abline(v = opt_pcs, col = "red", lty = 2)
+legend("bottomright",
+       legend = paste("Optimal PCs =", opt_pcs),
+       col = "red", lty = 2, bty = "n")
+dev.off()
+
+
+
 # Check the cluster assignments
-dapc1 <- dapc(data_GenInd, grp$grp, n.pca= 90 , n.clust=2, n.da = 100)
-scatter(dapc1)
-compoplot(dapc1, txt.leg=paste("Cluster", 1:2), lab="", ncol=1, xlab="individuals")
+
+opt_pcs <- as.numeric(xval$`Number of PCs Achieving Highest Mean Success`)
+# opt_pcs = 10
+
+
+# 6) DAPC using validated opt_pcs
+pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE) # PCA with ade4
+dapc1 <- dapc(data_GenInd, grp$grp, n.pca = opt_pcs, n.clust = 2, n.da = 1)
+scatter(dapc1) # scatter plot of DAPC results
+
+# save DAPC scatter plot
+png("DAPC_scatter.png", width = 1200, height = 1000, res = 150)
+
+# Plot scatter
+scatter(dapc1,
+        posi.da = "bottomright",
+        cex = 1.2,
+        scree.da = FALSE,
+        bg = "white")
+
+# Close file
+dev.off()
+
+
+png("DAPC_compoplot.png", width = 1200, height = 800, res = 150)
+
+# Plot compoplot
+compoplot(dapc1,
+          txt.leg = paste("Cluster", 1:2),
+          lab = "",
+          ncol = 1,
+          xlab = "Individuals",
+          col = alpha(c("red","blue"), 0.8),
+          border = NA)
+
+# Close file
+dev.off()
+
 
 
 # Compare assignments
 table(grp$grp, dapc1$assign)
 
 
-#pca_var <- dapc1$pca.eig # extract the PCA eigenvalues
-#sum(pca_var[1:90]) / sum(pca_var) * 100 # calculate the percentage of variance explained by the first 90 PCs
+# Variance explained by retained PCs
+pca_var <- dapc1$pca.eig # extract the PCA eigenvalues
+sum(pca_var[1:10]) / sum(pca_var) * 100 # calculate the percentage of variance explained by the first 10 PCs
 
 # Convert the posterior probabilities to a data frame
 posterior_data <- as.data.frame(dapc1$posterior)
@@ -1217,7 +1433,9 @@ aggregated_data <- genotype_data %>%
 # Create the final table
 final_table <- aggregated_data %>%
   select(Location, Long, Lat, Year, nbsex, nbAsex)
-#final_table<- mutate(final_table, Year = as.numeric(Year))
+final_table$Long <- as.numeric(final_table$Long)
+final_table$Lat <- as.numeric(final_table$Lat)
+final_table$Year <- as.numeric(final_table$Year)
 # Fit the regression model
 regression <- glm(formula = cbind(nbsex, nbAsex) ~ Lat + Long + Year,
                   data = final_table,

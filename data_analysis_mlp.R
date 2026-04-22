@@ -11,38 +11,40 @@
 #' 
 #' 
 #' 
-#' ## Installation of required packages
 
-# ── Set CRAN mirror (required for terminal/non-interactive use) ───────────────
+## Installation of required packages
 options(repos = c(CRAN = "https://cloud.r-project.org"))
 
-# ── CRAN packages ─────────────────────────────────────────────────────────────
+install_if_missing <- function(pkgs, bioc = FALSE) {
+  missing <- pkgs[!pkgs %in% rownames(installed.packages())]
+  if (!length(missing)) return(invisible(NULL))
+  if (bioc) {
+    BiocManager::install(missing, ask = FALSE, update = FALSE, Ncpus = parallel::detectCores())
+  } else {
+    install.packages(missing, dependencies = TRUE, Ncpus = parallel::detectCores(), quiet = TRUE)
+  }
+}
+
 cran_packages <- c(
-  "knitr", "ggplot2", "readxl", "tidyverse", "genepop", "hierfstat",
-  "mapdata", "mapplots", "grDevices", "adegenet", "poppr", "pegas",
-  "ape", "cowplot", "ade4", "viridis", "ggrepel", "ggsci",
-  "scales", "lme4", "dplyr", "factoextra", "sf", "rnaturalearth",
-  "rnaturalearthdata", "grid", "svglite", "BiocManager", "devtools"
+  "lme4",
+  "knitr", "ggplot2", "readxl", "tidyverse",
+  "genepop", "hierfstat", "mapdata", "mapplots",
+  "grDevices", "adegenet", "poppr", "pegas", "ape",
+  "cowplot", "ade4", "viridis", "ggrepel", "ggsci",
+  "scales", "dplyr", "factoextra", "sf",
+  "rnaturalearth", "rnaturalearthdata", "grid",
+  "svglite", "BiocManager", "devtools"
 )
 
-missing_cran <- cran_packages[!(cran_packages %in% installed.packages()[, "Package"])]
-if (length(missing_cran) > 0) {
-  install.packages(missing_cran)
-}
-invisible(lapply(cran_packages, library, character.only = TRUE))
-
-# ── Bioconductor packages ─────────────────────────────────────────────────────
 bioc_packages <- c("ggtree", "ggtreeExtra")
 
-missing_bioc <- bioc_packages[!(bioc_packages %in% installed.packages()[, "Package"])]
-if (length(missing_bioc) > 0) {
-  BiocManager::install(missing_bioc, ask = FALSE, update = FALSE)
-}
-invisible(lapply(bioc_packages, library, character.only = TRUE))
+install_if_missing(cran_packages)
+install_if_missing(bioc_packages, bioc = TRUE)
 
-# ── GitHub packages ───────────────────────────────────────────────────────────
-if (!"RClone" %in% installed.packages()[, "Package"]) {
-  devtools::install_github("dbailleul/RClone")
+invisible(lapply(c(cran_packages, bioc_packages), library, character.only = TRUE))
+
+if (!"RClone" %in% rownames(installed.packages())) {
+  devtools::install_github("dbailleul/RClone", dependencies = TRUE, quiet = TRUE)
 }
 library(RClone)
 

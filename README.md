@@ -1,94 +1,126 @@
-# Population Genetics of *Melampsora larici-populina* — Microsatellite Analysis
+# Population Genetics of *Melampsora larici-populina*
 
-An R Markdown workflow for population genetic analysis of poplar rust (*M. larici-populina*) isolates using microsatellite markers, including lineage definition, clustering, reproductive mode inference, spatial mapping, and regression.
+Microsatellite-based workflow for population genetic analysis of *Melampsora larici-populina* isolates.
 
+This repository contains an R workflow to:
 
-This code workflow is part of the study titled:
-## Long-lasting coexistence of multiple asexual lineages alongside their sexual counterparts in a fungal plant pathogen
+- Load isolate metadata and microsatellite genotypes
+- Define multilocus genotypes (MLGs) and multilocus lineages (MLLs)
+- Assign isolates to genetic clusters
+- Infer sexual versus asexual reproduction
+- Calculate population genetic indices
+- Build a bootstrapped phylogenetic tree
+- Generate spatial maps
+- Test the effects of geography and year using regression models
+
+## Associated study
+
+**Long-lasting coexistence of multiple asexual lineages alongside their sexual counterparts in a fungal plant pathogen**
+
+**Authors:**  
 Ammar Abdalrahem, Axelle Andrieux, Ronan Becheler, Sébastien Duplessis, Pascal Frey, Benoit Marcais, Kadiatou Schiffer-Forsyth, Solenn Stoeckel, Fabien Halkett
 
----
+## Repository contents
 
-## What the Code Does
+| File | Description |
+|------|-------------|
+| `data_analysis_mlp.Rmd` | Main R Markdown workflow |
+| `data_analysis_mlp.R` | Optional R script version for terminal execution |
+| `Table_data.tsv` | Input file with isolate metadata and microsatellite genotypes |
 
-1. **Data loading** — Reads isolate metadata and microsatellite genotypes from `Table_data.tsv`
-2. **MLG/MLL definition** — Defines multilocus genotypes and multilocus lineages using distance-based thresholding (`poppr`)
-3. **Clustering** — Assigns isolates to genetic clusters via K-means + DAPC (`adegenet`); removes uncertain assignments (<80% posterior probability)
-4. **Reproductive mode inference** — Classifies isolates as **asexual** or **sexual** using two approaches:
-   - *Cluster approach*: negative Fis → asexual (indirect indication)
-   - *Resampling approach*: MLL persisting across ≥ 2 years → asexual
-   - Final label: asexual if flagged by either approach
-5. **Population genetic indices** — Calculates N, G/N, Ar, Ho, Hs, Fis, rbarD per group (`hierfstat`, `poppr`)
-6. **Phylogenetic tree** — Builds bootstrapped UPGMA/NJ tree annotated by lineage and reproductive mode (`ggtree`)
-7. **Spatial analysis** — Maps sexual vs. asexual proportions across France (`mapdata`, `mapplots`)
-8. **Regression** — GLM and GLMM testing effect of latitude, longitude, and year on reproduction mode (`lme4`)
+## Requirements
 
----
+- R 4.3 or later recommended
+- RStudio recommended for knitting the `.Rmd` file
 
-## Dependencies
-
-**R version ≥ 4.3** and **RStudio** (required for automatic path detection) are recommended.
-
-Install all CRAN packages:
+Install the required CRAN packages:
 
 ```r
 install.packages(c(
   "knitr", "ggplot2", "readxl", "tidyverse", "genepop", "hierfstat",
-  "mapdata", "mapplots", "data.table", "colorspace", "adegenet", "poppr",
-  "pegas", "ape", "cowplot", "ade4", "remotes", "ggtreeExtra", "viridis",
-  "factoextra", "openxlsx", "ggrepel", "RClone", "ggsci", "scales",
-  "lme4", "dplyr", "reshape2", "rstudioapi"
+  "mapdata", "mapplots", "adegenet", "poppr", "pegas", "ape",
+  "cowplot", "ade4", "ggtreeExtra", "viridis", "ggrepel", "RClone",
+  "ggsci", "scales", "lme4", "dplyr", "factoextra", "sf",
+  "rnaturalearth", "rnaturalearthdata", "grid", "rstudioapi",
+  "reshape2", "svglite"
 ))
 ```
 
-Install the Bioconductor package `ggtree`:
+Install `ggtree` from Bioconductor:
 
 ```r
 if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
 BiocManager::install("ggtree")
 ```
 
----
+## Input format
 
-## Input Data
+The input file must be named:
 
-| File | Description |
-|------|-------------|
-| `Table_data.tsv` | Isolate metadata + microsatellite genotypes (must be in the same folder as the `.Rmd` file) |
-
-- Microsatellite locus columns must contain `Mlp` in the name
-- Missing genotype values must be coded as `999`
-
----
-
-## How to Run
-
-**In RStudio (recommended):**
-1. Place `data_analysis_mlp.Rmd` and `Table_data.tsv` in the same folder
-2. Open the `.Rmd` file in RStudio
-3. Install dependencies (see above)
-4. Click **Knit** → renders a full HTML report
-
-**From the R console:**
-```r
-setwd("path/to/your/folder")
-rmarkdown::render("data_analysis_mlp.Rmd")
+```text
+Table_data.tsv
 ```
 
----
+Requirements:
 
-## Outputs
+- Microsatellite locus columns must contain `Mlp` in the column name
+- Missing genotype values must be coded as `999`
+
+
+## Quick start
+
+### Option 1 — Run the `.Rmd` file in RStudio
+
+1. Put `data_analysis_mlp.Rmd` and `Table_data.tsv` in the same folder
+2. Open `data_analysis_mlp.Rmd` in RStudio
+3. Install the required packages
+4. Click **Knit**
+
+This will generate the HTML report and output files.
+
+### Option 2 — Run the `.R` script from the terminal
+
+If you use the script version of the workflow (`data_analysis_mlp.R`), you can run it directly from the terminal:
+
+```bash
+Rscript data_analysis_mlp.R
+```
+
+
+## Main outputs
 
 | File | Description |
 |------|-------------|
-| `data_analysis_mlp.html` | Full rendered report |
-| `new_genotype_data.csv` | Final genotype table with reproduction labels |
+| `new_genotype_data.csv` | Final genotype table with cluster and reproduction labels |
 | `filtered_mll_years.csv` | MLLs recurring across multiple years |
-| `cluster_assignments.png` | DAPC cluster probability plot |
-| `tree_plot1/2.png` | Annotated phylogenetic tree |
-| `map_all_years.png`, `map_2009_2011.png` | Spatial maps of reproduction mode |
-| `effect_of_latitude_*.png` | Regression plots |
+| `Fig1A_map.svg` | Sampling map |
+| `Silhouette_kmeans.png` | Silhouette plot for cluster evaluation |
+| `Dapc_xval.png` | Cross-validation plot for DAPC |
+| `DAPC_scatter.png` | DAPC scatter plot |
+| `DAPC_compoplot.png` | DAPC composition plot |
+| `cluster_assignments.png` | Cluster assignment probability plot |
+| `tree_plot1.png` | Circular phylogenetic tree |
+| `tree_plot2.png` | Annotated phylogenetic tree |
+| `map_all_years.png` | Map of sexual versus asexual proportions across all years |
+| `map_2009_2011.png` | Map for 2009 and 2011 only |
+| `effect_of_latitude_filtered.png` | GLM-based latitude effect plot |
+| `effect_of_latitude_glmm.png` | GLMM-based latitude effect plot |
+| `MST_data_mlp_pop_as_Reproduction_for_cloneEstimate.txt` | Export for downstream clone analysis |
+| `asex_mll_Year.png` | Asexual lineage abundance across years |
+| `asex_mll_Locations.png` | Asexual lineage abundance across locations |
+| `asex_mll_Year_Locations.png` | Combined lineage abundance figure |
 
----
+## Notes
+
+- The `.Rmd` file is the main reproducible workflow for generating the report
+- The `.R` file is useful for command-line or terminal-based execution
+- Isolates with uncertain cluster assignment are excluded from downstream analyses
+- Most output files are written to the working directory
+
+
+## License
+
+This project is distributed under the **CC BY 4.0** license.
+
 
 [![License: CC BY 4.0](https://img.shields.io/badge/License-CC_BY_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)

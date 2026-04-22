@@ -20,9 +20,9 @@ options(repos = c(CRAN = "https://cloud.r-project.org"))
 cran_packages <- c(
   "knitr", "ggplot2", "readxl", "tidyverse", "genepop", "hierfstat",
   "mapdata", "mapplots", "grDevices", "adegenet", "poppr", "pegas",
-  "ape", "cowplot", "ade4", "viridis", "ggrepel", "RClone", "ggsci",
+  "ape", "cowplot", "ade4", "viridis", "ggrepel", "ggsci",
   "scales", "lme4", "dplyr", "factoextra", "sf", "rnaturalearth",
-  "rnaturalearthdata", "grid", "svglite", "BiocManager"
+  "rnaturalearthdata", "grid", "svglite", "BiocManager", "devtools"
 )
 
 missing_cran <- cran_packages[!(cran_packages %in% installed.packages()[, "Package"])]
@@ -39,6 +39,12 @@ if (length(missing_bioc) > 0) {
   BiocManager::install(missing_bioc, ask = FALSE, update = FALSE)
 }
 invisible(lapply(bioc_packages, library, character.only = TRUE))
+
+# ── GitHub packages ───────────────────────────────────────────────────────────
+if (!"RClone" %in% installed.packages()[, "Package"]) {
+  devtools::install_github("dbailleul/RClone")
+}
+library(RClone)
 
 
 #' 

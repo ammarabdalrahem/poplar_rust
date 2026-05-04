@@ -14,41 +14,34 @@ date: "`r Sys.Date()`"
 ## Installation of required packages
 
 ```{r, include=FALSE}
+#Code to install packages if necessary, and read them with library function
 
+# ── Set CRAN mirror (required for terminal/non-interactive use) ───────────────
 options(repos = c(CRAN = "https://cloud.r-project.org"))
 
-install_if_missing <- function(pkgs, bioc = FALSE) {
-  missing <- pkgs[!pkgs %in% rownames(installed.packages())]
-  if (!length(missing)) return(invisible(NULL))
-  if (bioc) {
-    BiocManager::install(missing, ask = FALSE, update = FALSE, Ncpus = parallel::detectCores())
-  } else {
-    install.packages(missing, dependencies = TRUE, Ncpus = parallel::detectCores(), quiet = TRUE)
-  }
-}
-
+# ── CRAN packages ─────────────────────────────────────────────────────────────
 cran_packages <- c(
-  "lme4",
-  "knitr", "ggplot2", "readxl", "tidyverse",
-  "genepop", "hierfstat", "mapdata", "mapplots",
-  "grDevices", "adegenet", "poppr", "pegas", "ape",
-  "cowplot", "ade4", "viridis", "ggrepel", "ggsci",
-  "scales", "dplyr", "factoextra", "sf",
-  "rnaturalearth", "rnaturalearthdata", "grid",
-  "svglite", "BiocManager", "devtools"
+  "knitr", "ggplot2", "readxl", "tidyverse", "genepop", "hierfstat",
+  "mapdata", "mapplots", "grDevices", "adegenet", "poppr", "pegas",
+  "ape", "cowplot", "ade4", "viridis", "ggrepel", "RClone", "ggsci",
+  "scales", "lme4", "dplyr", "factoextra", "sf", "rnaturalearth",
+  "rnaturalearthdata", "grid", "svglite", "BiocManager"
 )
 
+missing_cran <- cran_packages[!(cran_packages %in% installed.packages()[, "Package"])]
+if (length(missing_cran) > 0) {
+  install.packages(missing_cran)
+}
+invisible(lapply(cran_packages, library, character.only = TRUE))
+
+# ── Bioconductor packages ─────────────────────────────────────────────────────
 bioc_packages <- c("ggtree", "ggtreeExtra")
 
-install_if_missing(cran_packages)
-install_if_missing(bioc_packages, bioc = TRUE)
-
-invisible(lapply(c(cran_packages, bioc_packages), library, character.only = TRUE))
-
-if (!"RClone" %in% rownames(installed.packages())) {
-  devtools::install_github("dbailleul/RClone", dependencies = TRUE, quiet = TRUE)
+missing_bioc <- bioc_packages[!(bioc_packages %in% installed.packages()[, "Package"])]
+if (length(missing_bioc) > 0) {
+  BiocManager::install(missing_bioc, ask = FALSE, update = FALSE)
 }
-library(RClone)
+invisible(lapply(bioc_packages, library, character.only = TRUE))
 
 ```
 
@@ -75,6 +68,11 @@ general_data <- as.data.frame(general_data)
 
 # remove unknown population
 general_data <- general_data[!(general_data$Pop == "NA"), ]
+# remove the degree symbol from all character columns in the data frame
+general_data <- general_data %>%
+  mutate(across(where(is.character), ~ gsub("°", "", .)))
+
+
 
 
 ```
@@ -1726,7 +1724,7 @@ mll_years <- ggplot(asexual_lineages_years, aes(x = Year, y = n, fill = as.facto
   ) +
   scale_fill_manual(values = mll_color_mapping) +
   theme(
-    text = element_text(family = "Times New Roman", size = 12),
+    text = element_text(size = 12),
     axis.title = element_text(size = 15, face = "bold"), 
     axis.text = element_text(size = 14, color = "black"),  # Reduced from 15 for better balance
     axis.text.x = element_text(angle = 0, hjust = 1),  # Improved x-axis label readability
@@ -1763,7 +1761,7 @@ mll_locations <- ggplot(asexual_lineages_locations, aes(x = n, y = Location, fil
   ) +
   scale_fill_manual(values = mll_color_mapping) +
   theme(
-    text = element_text(family = "Times New Roman", size = 12),
+    text = element_text( size = 12),
     axis.title = element_text(size = 15, face = "bold"), 
     axis.text = element_text(size = 14, color = "black"),  # Slightly reduced from 15 for better fit
     legend.title = element_text(size = 14, face = "bold", margin = margin(r = 20)), 

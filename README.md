@@ -47,13 +47,19 @@ install.packages(c(
 ))
 ```
 
-Install `ggtree` from Bioconductor:
+Install required Bioconductor packages (`ggtree` and `ggtreeExtra`):
 
 ```r
 if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
-BiocManager::install("ggtree")
-```
 
+# ── Bioconductor packages ─────────────────────────────────────────────────────
+bioc_packages <- c("ggtree", "ggtreeExtra")
+missing_bioc <- bioc_packages[!(bioc_packages %in% installed.packages()[, "Package"])]
+if (length(missing_bioc) > 0) {
+  BiocManager::install(missing_bioc, ask = FALSE, update = FALSE)
+}
+invisible(lapply(bioc_packages, library, character.only = TRUE))
+```
 ## Input format
 
 The input file must be named:

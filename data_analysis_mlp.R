@@ -11,6 +11,10 @@
 #' 
 #' 
 #' 
+#' ## Installation of required packages
+#' 
+## ----include=FALSE----------------------------------------------------------------------------------------------------------------------------------------------
+#Code to install packages if necessary, and read them with library function
 
 ## Installation of required packages
 options(repos = c(CRAN = "https://cloud.r-project.org"))
@@ -48,18 +52,18 @@ if (!"RClone" %in% rownames(installed.packages())) {
 }
 library(RClone)
 
-
 #' 
 #' 
 #' 
 #' ### Data retrieval
 #' 
-## ----include=FALSE-------------------------------------------------------------------------------------
+## ----include=FALSE----------------------------------------------------------------------------------------------------------------------------------------------
 # get the path of the current R script
-setwd(dirname(normalizePath("data_analysis_mlp.R")))
+setwd(dirname(normalizePath("data_analysis_mlp_new.R")))
 
 # check the current working directory
 getwd()
+
 
 
 # import the data from tsv
@@ -70,17 +74,22 @@ general_data <- as.data.frame(general_data)
 
 # remove unknown population
 general_data <- general_data[!(general_data$Pop == "NA"), ]
+# remove the degree symbol from all character columns in the data frame
+general_data <- general_data %>%
+  mutate(across(where(is.character), ~ gsub("°", "", .)))
+
+
 
 
 
 #' 
-## ------------------------------------------------------------------------------------------------------
-#head(general_data) 
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+head(general_data) 
 
 #' 
 #' ## Figure shows the sample collections sites and stratigies
 #' 
-## ------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 # 1) Summarise isolates per site/year
 sampling_summary <- general_data %>%
@@ -184,7 +193,7 @@ p <- ggplot() +
   ) +
   labs(title = "A. Geographic distribution map")
 
-#p
+p
 
 # 5) Export for Inkscape + optional 1200 dpi PNG
 # Vector is best for Inkscape; DPI is only relevant for PNG (raster) [web:118][web:146].
@@ -203,7 +212,7 @@ ggsave("Fig1A_map.svg", p, device = svglite::svglite,
 #' 
 #' ## The definition of MLLs
 #' 
-## ------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Create table of genotype data by select columns with "Mlp" in the name and the first column as isolate id
 genotype_cols <- c("Isolate", grep("Mlp", names(general_data), value = TRUE)) 
 genotype_data <- general_data[, genotype_cols] # 
@@ -276,7 +285,7 @@ genotype_data$MLL <- mll_assignments
 #' ### Ascending order for fixation of MLL
 #' 
 #' 
-## ------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Calculate the frequency of each MLL combination
 count_MLL_table <- data.frame(MLL = unique(genotype_data$MLL), Count = NA)
 
@@ -322,7 +331,7 @@ genotype_data <- genotype_data[order(genotype_data$organised_MLL),]
 #' 
 #' ### Assignment of isolates to clusters based on genetic data 
 #' 
-## ------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Create a table of genotypes for allele data only
 # Select columns with "Mlp" in the name and the first column as isolate id
 genotype_cols <- c(grep("Mlp", names(genotype_data), value = TRUE))
@@ -360,14 +369,18 @@ opt_pcs <- 10  # temporary fixed number of PCs to retain for clustering (can be 
 scores <- pca$x[, 1:opt_pcs, drop = FALSE]
 
 # 3) Silhouette-based K selection on PCA scores
-fviz_nbclust(scores, kmeans, method = "silhouette", k.max = 20)
+# Define custom kmeans with higher iterations
+my_kmeans <- function(x, k) {
+  kmeans(x, k, iter.max = 100, nstart = 25)
+}
+
+fviz_nbclust(scores, my_kmeans, method = "silhouette", k.max = 20)
 
 # save the plot
 png("Silhouette_kmeans.png", width = 1200, height = 800, res = 150)
 # Plot silhouette results
-fviz_nbclust(scores, kmeans, method = "silhouette", k.max = 20)
+fviz_nbclust(scores, my_kmeans, method = "silhouette", k.max = 20)
 dev.off()
-
 
 # 4) find.clusters()
 
@@ -442,7 +455,7 @@ dev.off()
 
 
 # Compare assignments
-#table(grp$grp, dapc1$assign)
+table(grp$grp, dapc1$assign)
 
 
 # Variance explained by retained PCs
@@ -475,7 +488,7 @@ cluster_assignments <- ggplot(melted_data, aes(x = Cluster, y = Probability, col
 geom_text_repel() # to avoid overlapping labels
   
 
-#cluster_assignments
+cluster_assignments
 
 ggsave("cluster_assignments.png", cluster_assignments, width = 8, height = 6, dpi = 1200, bg = "transparent")  
 
@@ -492,7 +505,7 @@ genotype_data$Cluster <- ifelse(posterior_data[, 1] >= 0.80, "Cluster 1", #80%
 
 
 # Inspect the assignments
-#table(genotype_data$Cluster)
+table(genotype_data$Cluster)
 
 #Remove uncertain_data
 genotype_data <- subset(genotype_data, Cluster %in% c("Cluster 1", "Cluster 2"))
@@ -506,7 +519,7 @@ genotype_data <- subset(genotype_data, Cluster %in% c("Cluster 1", "Cluster 2"))
 #' ### Calculation of population genetic indices for each cluster 
 #' 
 #' 
-## ------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 # Creat it again because we removes uncertain data
 # Select columns with "Mlp" in the name and the first column as isolate id
@@ -601,7 +614,7 @@ kable(Tab_Indices_per_pop, digits = 3)
 #' ### Define the reproduction mode
 #' 
 #' 
-## ------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Tab_Indices_per_pop is the dataframe containing the results
 # Loop through each row of the dataframe
 # Define the  reproduction mode based on the Fis value (cluster approach)
@@ -625,7 +638,7 @@ for (i in 1:nrow(Tab_Indices_per_pop)) {
 #' Depending on the MLL persistence, we can assign the reproduction mode to each lineage. If the same lineage exist at least two different years (to avoide clone mate) is asex, otherwise is sex.
 #' 
 #' ### Create table of repeated Mll diffrent years
-## ------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Add the Year column to the genotype_data table
 genotype_data$Year <- general_data$Year[match(row.names(genotype_data), general_data$Isolate)]
 
@@ -706,7 +719,7 @@ write.table(mll_year_df, file = "filtered_mll_years.csv", sep = ",", quote = FAL
 #' 
 #' ### Assign the reproduction mode based on the MLL persistence (resampling approach)
 #' 
-## ------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 for (i in 1:nrow(mll_year_df)) {
   if (mll_year_df$YearCount[i] >= 1) { 
     mll <- mll_year_df[mll_year_df$organised_MLL == mll_year_df$organised_MLL[i], ]
@@ -743,7 +756,7 @@ genotype_data[is.na(genotype_data$Mll_persistence), "Mll_persistence"] <- "Sex"
 #' ## Population genetic indices for each reproduction mode (resampling approach)
 #' 
 #' 
-## ------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Convert to genind object
 final_GenInd <- df2genind(
   X = genotype_mlp,    
@@ -826,12 +839,12 @@ kable(Tab_Indices_per_pop, digits = 3)
 #' 
 #' ### Fisher's exact test for the Clustering and resampling approches
 #' 
-## ----echo=FALSE----------------------------------------------------------------------------------------
+## ----echo=FALSE-------------------------------------------------------------------------------------------------------------------------------------------------
 # Create the contingency table
 contingency_table <- table(genotype_data$assignment, genotype_data$Mll_persistence)
 
 # Print the contingency table
-#print(contingency_table)
+print(contingency_table)
 
 # Rename the rows and columns of the contingency table
 rownames(contingency_table) <- c("Asex_cluster", "Sex_cluster")
@@ -839,7 +852,7 @@ colnames(contingency_table) <- c("Asex_resampling", "Sex_resampling")
 
 # Fisher's exact test 
 fisher_test <- fisher.test(contingency_table)
-#print(fisher_test)
+print(fisher_test)
 
 
 
@@ -848,7 +861,7 @@ fisher_test <- fisher.test(contingency_table)
 #' ## Define reproduction mode based on combination of both approches
 #' 
 #' 
-## ------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 # If the individual is assigned to the Asex cluster or has Asex resampling, assign "Asex" to the Reproduction column. Otherwise, assign "sex".
 
@@ -863,7 +876,7 @@ genotype_data$Reproduction <- ifelse(genotype_data$assignment == "Asex" | genoty
 #' 
 #' 
 #' 
-## ------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Convert to genind object
 final_GenInd <- df2genind(
   X = genotype_mlp,   
@@ -951,7 +964,7 @@ write.table(genotype_data, file = "new_genotype_data.csv", sep = ",", quote = FA
 #' 
 #' ## Population genetic indices for asex group only 
 #' 
-## ----echo=FALSE----------------------------------------------------------------------------------------
+## ----echo=FALSE-------------------------------------------------------------------------------------------------------------------------------------------------
 
 # Select columns with "Asex"
 Asex_data <- genotype_data[genotype_data$Reproduction == "Asex", ]
@@ -1058,7 +1071,7 @@ kable(head(Tab_Indices_per_mll, 10), digits = 3)
 #' 
 #' ## Population genetic indices for sex group only 
 #' 
-## ----echo=FALSE----------------------------------------------------------------------------------------
+## ----echo=FALSE-------------------------------------------------------------------------------------------------------------------------------------------------
 
 # Select columns with "Sex" 
 Sex_data <- genotype_data[genotype_data$Reproduction == "Sex", ]
@@ -1167,7 +1180,7 @@ rm (Ar_per_loc, data_Fstat, data_Genclone_Asex, data_Genclone_Sex,
 #' 
 #' ##  Nighbour joining tree 
 #'  
-## ------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 #Add the region to the genotype data
 genotype_data$Region <- general_data$Region[match(row.names(genotype_data), general_data$Isolate)]
 
@@ -1307,7 +1320,7 @@ ggsave("tree_plot2.png", p2, width = 12, height = 9, dpi = 1200, bg = "transpare
 #' ## Spatial analysis 
 #' 
 #' 
-## ----echo=FALSE----------------------------------------------------------------------------------------
+## ----echo=FALSE-------------------------------------------------------------------------------------------------------------------------------------------------
 
 # summarize data by population and location
 genotype_data$Pop <- general_data$Pop[match(row.names(genotype_data), general_data$Isolate)]
@@ -1360,7 +1373,7 @@ dev.off()
 #' ### Geographical distribution of mlp across France 2009 and 2011
 #' 
 #' 
-## ----fig.width=10, fig.height=8------------------------------------------------------------------------
+## ----fig.width=10, fig.height=8---------------------------------------------------------------------------------------------------------------------------------
 
 # Filter the data to include only the years 2009 and 2011
 pop_data <- genotype_data %>%
@@ -1404,7 +1417,7 @@ dev.off()
 #' 
 #' Reproduction mode with latitude, longitude, and year (all years)
 #' 
-## ----echo=FALSE----------------------------------------------------------------------------------------
+## ----echo=FALSE-------------------------------------------------------------------------------------------------------------------------------------------------
 
 #Add site information
 genotype_data$Location <- general_data$Site[match(row.names(genotype_data), general_data$Isolate)]
@@ -1442,7 +1455,7 @@ regression <- glm(formula = cbind(nbsex, nbAsex) ~ Lat + Long + Year,
               
 
 # Display the summary of the regression model
-#summary(regression)
+summary(regression)
 
 
 # Fit the GLMM with Year as a random effect
@@ -1453,7 +1466,7 @@ glmm_model <- glmer(
 )
 
 # Display the summary of the GLMM
-#summary(glmm_model)
+summary(glmm_model)
 
 
 
@@ -1461,7 +1474,7 @@ glmm_model <- glmer(
 #' 
 #' ### Plot the regression
 #' 
-## ----echo=FALSE----------------------------------------------------------------------------------------
+## ----echo=FALSE-------------------------------------------------------------------------------------------------------------------------------------------------
 
 # Filter the data to include only the years 2009 and 2011
 final_table_filtered <- final_table %>%
@@ -1476,7 +1489,7 @@ regression_filtered <- glm(formula = cbind(nbsex, nbAsex) ~ Lat + Long + Year,
                            family = binomial)
 
 # Display the summary of the regression model
-#summary(regression_filtered)
+summary(regression_filtered)
 
 # Create Prediction Data combination of Lat and Long with only the years 2009 and 2011
 # Generate predictions: Apply the logistic regression model to this grid to predict the probability of sexual reproduction for each combination of latitude, longitude, and year.
@@ -1510,7 +1523,7 @@ p_lat_filtered <- ggplot(final_table_filtered, aes(x = Lat, y = nbsex / (nbsex +
     panel.grid.minor = element_blank()  # Remove minor gridlines for clarity
   )
 
-#p_lat_filtered
+p_lat_filtered
 
 # Save the plot
 ggsave("effect_of_latitude_filtered.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 1200)
@@ -1526,7 +1539,7 @@ glmm_model <- glmer(
   family = binomial
 )
 #Summary of the GLMM
-#summary(glmm_model)
+summary(glmm_model)
 
 
 # Create prediction data for Latitude, holding Long at median, with 2009 and 2011
@@ -1577,7 +1590,7 @@ p_lat_filtered <- ggplot(final_table_filtered, aes(x = Lat, y = nbsex / (nbsex +
 
 
 
-#p_lat_filtered
+p_lat_filtered
 
 # Optional: Save the plot
 ggsave("effect_of_latitude_glmm.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 1200)
@@ -1588,7 +1601,7 @@ ggsave("effect_of_latitude_glmm.png", plot = p_lat_filtered, width = 6, height =
 #' 
 #' ## Creat data for ClonEstiMate
 #' 
-## ------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Create table for minimum spanning tree (MST) software by selecting relevant columns
 MST_data <- c("Reproduction", "Year", grep("Mlp", names(genotype_data), value = TRUE))
 MST_data <- genotype_data[, MST_data]
@@ -1683,7 +1696,7 @@ write.table(MST_data, "MST_data_mlp_pop_as_Reproduction_for_cloneEstimate.txt", 
 #' 
 #' ## Abundance of diffrent asexual lineages 
 #' 
-## ------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 # Manually define the color mapping
 mll_color_mapping <- c(
@@ -1717,7 +1730,7 @@ mll_years <- ggplot(asexual_lineages_years, aes(x = Year, y = n, fill = as.facto
   ) +
   scale_fill_manual(values = mll_color_mapping) +
   theme(
-    text = element_text(family = "serif", size = 12),
+    text = element_text(size = 12),
     axis.title = element_text(size = 15, face = "bold"), 
     axis.text = element_text(size = 14, color = "black"),  # Reduced from 15 for better balance
     axis.text.x = element_text(angle = 0, hjust = 1),  # Improved x-axis label readability
@@ -1754,7 +1767,7 @@ mll_locations <- ggplot(asexual_lineages_locations, aes(x = n, y = Location, fil
   ) +
   scale_fill_manual(values = mll_color_mapping) +
   theme(
-    text = element_text(family = "serif", size = 12),
+    text = element_text( size = 12),
     axis.title = element_text(size = 15, face = "bold"), 
     axis.text = element_text(size = 14, color = "black"),  # Slightly reduced from 15 for better fit
     legend.title = element_text(size = 14, face = "bold", margin = margin(r = 20)), 
@@ -1771,7 +1784,7 @@ mll_locations <- ggplot(asexual_lineages_locations, aes(x = n, y = Location, fil
   ) +
   guides(fill = guide_legend(nrow = 1, override.aes = list(size = 4)))  # Forces single row
 
-#mll_locations
+mll_locations
 
 ggsave("asex_mll_Locations.png", mll_locations, width = 17, height = 8, dpi = 1200, bg = "transparent")  # Save the plot with desired dimensions
   
@@ -1798,7 +1811,7 @@ ggsave("asex_mll_Year_Locations.png", combined_plot, width = 10, height = 8, dpi
 #' 
 #' ## Fisher's exact test for each asexual MLL and Year
 #' 
-## ------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 asexual_lineages_years <- dat1 %>%
   filter(Group == "Asex") %>% # Filter only Asex lineages
   group_by(Year,MLL) %>% # Group by Location and MLL
@@ -1818,7 +1831,7 @@ print(contingency_table_year_mll)
 fisher_matrix_year_mll <- as.matrix(contingency_table_year_mll[, -1]) 
 
 fisher_result_year_mll <- fisher.test(fisher_matrix_year_mll, simulate.p.value = TRUE, B = 1e5) # 100,000 simulations
-#print(fisher_result_year_mll)
+print(fisher_result_year_mll)
 
 
 asexual_lineages_locations <- dat1 %>%
@@ -1833,13 +1846,13 @@ asexual_lineages_locations <- dat1 %>%
 contingency_table_location_mll <- asexual_lineages_locations %>%
   pivot_wider(names_from = MLL, values_from = n, values_fill = list(n = 0)) # Reshape to wide format
 
-#print(contingency_table_location_mll)
+print(contingency_table_location_mll)
 
 # Convert contingency table to matrix (excluding the Location column)
 fisher_matrix_locations_mll <- as.matrix(contingency_table_location_mll[, -1])
 
 fisher_result_locations_mll <- fisher.test(fisher_matrix_locations_mll, simulate.p.value = TRUE, B = 1e5) # 100,000 simulations
-#print(fisher_result_locations_mll)
+print(fisher_result_locations_mll)
 
 
 #' 

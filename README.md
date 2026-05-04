@@ -37,12 +37,13 @@ Install the required CRAN packages:
 
 ```r
 install.packages(c(
-  "knitr", "ggplot2", "readxl", "tidyverse", "genepop", "hierfstat",
-  "mapdata", "mapplots", "adegenet", "poppr", "pegas", "ape",
-  "cowplot", "ade4", "ggtreeExtra", "viridis", "ggrepel", "RClone",
-  "ggsci", "scales", "lme4", "dplyr", "factoextra", "sf",
-  "rnaturalearth", "rnaturalearthdata", "grid", "rstudioapi",
-  "reshape2", "svglite"
+  "lme4","knitr", "ggplot2", "readxl", "tidyverse",
+  "genepop", "hierfstat", "mapdata", "mapplots",
+  "grDevices", "adegenet", "poppr", "pegas", "ape",
+  "cowplot", "ade4", "viridis", "ggrepel", "ggsci",
+  "scales", "dplyr", "factoextra", "sf",
+  "rnaturalearth", "rnaturalearthdata", "grid",
+  "svglite", "BiocManager", "devtools"
 ))
 ```
 

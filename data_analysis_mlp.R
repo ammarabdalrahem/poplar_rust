@@ -14,43 +14,20 @@
 #' ## Installation of required packages
 #' 
 ## ----include=FALSE----------------------------------------------------------------------------------------------------------------------------------------------
-#Code to install packages if necessary, and read them with library function
+# Load required packages only
 
-## Installation of required packages
-options(repos = c(CRAN = "https://cloud.r-project.org"))
-
-install_if_missing <- function(pkgs, bioc = FALSE) {
-  missing <- pkgs[!pkgs %in% rownames(installed.packages())]
-  if (!length(missing)) return(invisible(NULL))
-  if (bioc) {
-    BiocManager::install(missing, ask = FALSE, update = FALSE, Ncpus = parallel::detectCores())
-  } else {
-    install.packages(missing, dependencies = TRUE, Ncpus = parallel::detectCores(), quiet = TRUE)
-  }
-}
-
-cran_packages <- c(
-  "lme4",
-  "knitr", "ggplot2", "readxl", "tidyverse",
+packages <- c(
+  "lme4", "knitr", "ggplot2", "readxl", "tidyverse",
   "genepop", "hierfstat", "mapdata", "mapplots",
-  "grDevices", "adegenet", "poppr", "pegas", "ape",
+  "adegenet", "poppr", "pegas", "ape",
   "cowplot", "ade4", "viridis", "ggrepel", "ggsci",
   "scales", "dplyr", "factoextra", "sf",
-  "rnaturalearth", "rnaturalearthdata", "grid",
-  "svglite", "BiocManager", "devtools"
+  "rnaturalearth", "rnaturalearthdata", "rnaturalearthhires",
+  "svglite", "reshape2", "ggpubr", "ggforce",
+  "ggtree", "ggtreeExtra", "RClone"
 )
 
-bioc_packages <- c("ggtree", "ggtreeExtra")
-
-install_if_missing(cran_packages)
-install_if_missing(bioc_packages, bioc = TRUE)
-
-invisible(lapply(c(cran_packages, bioc_packages), library, character.only = TRUE))
-
-if (!"RClone" %in% rownames(installed.packages())) {
-  devtools::install_github("dbailleul/RClone", dependencies = TRUE, quiet = TRUE)
-}
-library(RClone)
+lapply(packages, library, character.only = TRUE)
 
 #' 
 #' 
@@ -128,31 +105,31 @@ cols <- c(
 p <- ggplot() +
   geom_sf(data = fr, fill = "white", color = "black", linewidth = 0.35) +
   geom_sf(data = fr_depts, fill = NA, color = "grey85", linewidth = 0.20) +
-
+  
   # Durance highlight
   annotate("rect", xmin = 5.7, xmax = 6.7, ymin = 43.55, ymax = 44.15,
            fill = "#2A9D8F", alpha = 0.18, color = NA) +
-
+  
   # Circles
   geom_point(
     data = pts,
     aes(Long, Lat, fill = Campaign, size = n_isolates),
     shape = 21, color = "black", stroke = 0.25, alpha = 0.95
   ) +
-
+  
   # Cavalaire star + legend
   geom_point(
     data = cav,
     aes(Long, Lat, shape = StarLegend),
     color = "#B2182B", size = 4.8, stroke = 1
   ) +
-
+  
   # Durance label + arrow
   annotate("text", x = 7.35, y = 44.55, label = "Durance\nRiver valley",
            size = 4.2, hjust = 0) +
   annotate("segment", x = 7.20, xend = 6.35, y = 44.40, yend = 43.90,
            arrow = arrow(length = unit(2, "mm")), linewidth = 0.6) +
-
+  
   # Cavalaire label + arrow (arrow points to the star coordinates)
   annotate("text", x = 6.5, y = 42.85, label = "Cavalaire-\nsur-Mer",
            size = 4.2, hjust = 0) +
@@ -161,7 +138,7 @@ p <- ggplot() +
            xend = cav$Long[1], yend = cav$Lat[1],
            arrow = arrow(length = unit(2, "mm")),
            linewidth = 0.6) +
-
+  
   # Scales
   scale_fill_manual(values = cols, name = NULL) +
   scale_shape_manual(values = c("Cavalaire-sur-Mer (Feb 2024)" = 8), name = NULL) +  # <-- FIX
@@ -171,15 +148,15 @@ p <- ggplot() +
     breaks = c(5, 20, 50),
     labels = c("5 isolates", "20 isolates", "50+ isolates")
   ) +
-
+  
   coord_sf(xlim = c(-5, 9.7), ylim = c(41.3, 51.6), expand = FALSE) +
-
+  
   guides(
     size  = guide_legend(order = 1, override.aes = list(fill = "white", shape = 21, color = "black")),
     fill  = guide_legend(order = 2, override.aes = list(size = 3, shape = 21, color = "black")),
     shape = guide_legend(order = 3, override.aes = list(size = 4, color = "#B2182B"))
   ) +
-
+  
   theme_void(base_size = 12) +
   theme(
     panel.border = element_rect(color = "black", fill = NA, linewidth = 0.8),
@@ -224,7 +201,7 @@ genotype_data$Isolate = NULL
 
 # Remove all non-ASCII characters from individual names
 rownames(genotype_data) <- iconv(rownames(genotype_data), 
-                                  from = "UTF-8", to = "ASCII", sub = "")
+                                 from = "UTF-8", to = "ASCII", sub = "")
 
 
 
@@ -485,8 +462,8 @@ cluster_assignments <- ggplot(melted_data, aes(x = Cluster, y = Probability, col
     legend.background = element_rect(fill = "transparent"),             
     legend.key = element_rect(fill = "transparent")                     
   ) +
-geom_text_repel() # to avoid overlapping labels
-  
+  geom_text_repel() # to avoid overlapping labels
+
 
 cluster_assignments
 
@@ -500,8 +477,8 @@ certain_data <- genotype_mlp[posterior_data[, 1] >= 0.80 | posterior_data[, 2] >
 uncertain_data <- genotype_mlp[posterior_data[, 1] < 0.80 & posterior_data[, 2] < 0.80, ]
 
 genotype_data$Cluster <- ifelse(posterior_data[, 1] >= 0.80, "Cluster 1", #80% 
-                       ifelse(posterior_data[, 2] >= 0.80, "Cluster 2", 
-                                            "None Determined"))
+                                ifelse(posterior_data[, 2] >= 0.80, "Cluster 2", 
+                                       "None Determined"))
 
 
 # Inspect the assignments
@@ -590,7 +567,7 @@ for (i in levels(data_Fstat$pop) ){
   Fis[a]<-fstat_basic_Temporel$overall["Fis"] 
   Fis_sd[a]<- sd(fstat_basic_Temporel$perloc$Fis)
   Fis_var[a]<- var(fstat_basic_Temporel$perloc$Fis)
-
+  
 }
 
 # Calculating allelic richness
@@ -1038,7 +1015,7 @@ for (i in levels(data_Fstat$pop) ){
   Fis[a]<-fstat_basic_Temporel$overall["Fis"] 
   Fis_sd[a]<- sd(fstat_basic_Temporel$perloc$Fis)
   Fis_var[a]<- var(fstat_basic_Temporel$perloc$Fis)
-
+  
 }
 
 # Ar
@@ -1145,7 +1122,7 @@ for (i in levels(data_Fstat$pop) ){
   Fis[a]<-fstat_basic_Temporel$overall["Fis"] 
   Fis_sd[a]<- sd(fstat_basic_Temporel$perloc$Fis)
   Fis_var[a]<- var(fstat_basic_Temporel$perloc$Fis)
-
+  
 }
 
 # Ar
@@ -1289,7 +1266,7 @@ p2 <- p +
     grid.params = list(color = "black", linetype = 5, size = 0.1, alpha = 0.7)  # Add grid lines
   ) +
   scale_fill_manual(values = mll_color_mapping) +
-   # Customize the color gradient
+  # Customize the color gradient
   theme(
     panel.background = element_rect(fill='transparent'), # transparent panel bg
     plot.background = element_rect(fill='transparent', color=NA), # transparent plot bg
@@ -1299,7 +1276,7 @@ p2 <- p +
     legend.box.background = element_rect(fill='transparent'), 
     legend.text = element_text(color = 'black', face = 'bold', size = 13), 
     legend.title = element_text(color = 'black', face = 'bold', size = 15) 
-
+    
   ) 
 
 # Modify legend titles
@@ -1330,7 +1307,7 @@ genotype_data$Long <- general_data$Long[match(row.names(genotype_data), general_
 genotype_data$Lat <- general_data$Lat[match(row.names(genotype_data), general_data$Isolate)]
 
 
-  
+
 
 pop_data <- genotype_data %>%
   group_by(Pop, Long, Lat, Reproduction) %>%
@@ -1452,7 +1429,7 @@ final_table$Year <- as.numeric(final_table$Year)
 regression <- glm(formula = cbind(nbsex, nbAsex) ~ Lat + Long + Year,
                   data = final_table,
                   family = binomial)
-              
+
 
 # Display the summary of the regression model
 summary(regression)
@@ -1743,7 +1720,7 @@ mll_years <- ggplot(asexual_lineages_years, aes(x = Year, y = n, fill = as.facto
 mll_years
 
 ggsave("asex_mll_Year.png", mll_years, width = 17, height = 8, dpi = 1200, bg = "transparent")  # Save the plot with desired dimensions
-  
+
 
 
 
@@ -1787,7 +1764,7 @@ mll_locations <- ggplot(asexual_lineages_locations, aes(x = n, y = Location, fil
 mll_locations
 
 ggsave("asex_mll_Locations.png", mll_locations, width = 17, height = 8, dpi = 1200, bg = "transparent")  # Save the plot with desired dimensions
-  
+
 
 
 

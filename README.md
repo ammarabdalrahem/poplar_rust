@@ -13,6 +13,39 @@ This repository contains an R workflow to:
 - Generate spatial maps
 - Test the effects of geography and year using regression models
 
+
+This repository contains a fully reproducible R workflow with Docker for cross-platform.
+
+
+---
+
+## Fully Reproducible with Docker
+
+The entire analysis environment is packaged in a Docker image. No R installation, no package management, no dependency conflicts.
+
+### Prerequisites
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (free, works on macOS / Windows / Linux)
+
+### Quick start
+
+```bash
+# 1. Clone the repository (contains the input data)
+git clone https://github.com/ammarabdalrahem/poplar_rust.git
+cd poplar_rust
+
+# 2. Run the analysis — one command
+docker run --rm \
+  -v $(pwd):/project \
+  ghcr.io/ammarabdalrahem/poplar_rust:1.0
+```
+
+> **On Windows PowerShell**, replace `$(pwd)` with `${PWD}`.
+
+All outputs (figures, tables, CSV files) will appear in your local `poplar_rust/` folder after the run completes.
+
+---
+
 ## Associated study
 
 **Long-lasting coexistence of multiple asexual lineages alongside their sexual counterparts in a fungal plant pathogen**
@@ -20,18 +53,28 @@ This repository contains an R workflow to:
 **Authors:**  
 Ammar Abdalrahem, Axelle Andrieux, Ronan Becheler, Sébastien Duplessis, Pascal Frey, Benoit Marcais, Kadiatou Schiffer-Forsyth, Solenn Stoeckel, Fabien Halkett
 
+---
+
 ## Repository contents
 
 | File | Description |
 |------|-------------|
-| `data_analysis_mlp.Rmd` | Main R Markdown workflow |
-| `data_analysis_mlp.R` | Optional R script version for terminal execution |
+| `data_analysis_mlp_new.R` | R script version for terminal / Docker execution |
 | `Table_data.tsv` | Input file with isolate metadata and microsatellite genotypes |
+| `Dockerfile` | Docker image definition for full reproducibility |
 
-## Requirements
+---
 
-- R 4.3 or later recommended
-- RStudio recommended for knitting the `.Rmd` file
+## Manual setup (without Docker)
+
+If you prefer to run the analysis manually in R:
+
+### Requirements
+
+- R 4.4.1 or later recommended
+- RStudio recommended for interactive work
+
+### R packages
 
 Install the required CRAN packages:
 
@@ -39,11 +82,12 @@ Install the required CRAN packages:
 install.packages(c(
   "lme4","knitr", "ggplot2", "readxl", "tidyverse",
   "genepop", "hierfstat", "mapdata", "mapplots",
-  "grDevices", "adegenet", "poppr", "pegas", "ape",
+  "adegenet", "poppr", "pegas", "ape",
   "cowplot", "ade4", "viridis", "ggrepel", "ggsci",
   "scales", "dplyr", "factoextra", "sf",
-  "rnaturalearth", "rnaturalearthdata", "grid",
-  "svglite", "BiocManager", "devtools"
+  "rnaturalearth", "rnaturalearthdata",
+  "svglite", "BiocManager", "devtools", "reshape2",
+  "ggpubr", "ggforce"
 ))
 ```
 
@@ -51,15 +95,23 @@ Install required Bioconductor packages (`ggtree` and `ggtreeExtra`):
 
 ```r
 if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
-
-# ── Bioconductor packages ─────────────────────────────────────────────────────
-bioc_packages <- c("ggtree", "ggtreeExtra")
-missing_bioc <- bioc_packages[!(bioc_packages %in% installed.packages()[, "Package"])]
-if (length(missing_bioc) > 0) {
-  BiocManager::install(missing_bioc, ask = FALSE, update = FALSE)
-}
-invisible(lapply(bioc_packages, library, character.only = TRUE))
+BiocManager::install(c("ggtree", "ggtreeExtra"), ask = FALSE, update = FALSE)
 ```
+
+Install RClone from GitHub:
+
+```r
+remotes::install_github("dbailleul/RClone", dependencies = TRUE)
+```
+
+### Run the script
+
+```bash
+Rscript data_analysis_mlp_new.R
+```
+
+---
+
 ## Input format
 
 The input file must be named:
@@ -73,26 +125,7 @@ Requirements:
 - Microsatellite locus columns must contain `Mlp` in the column name
 - Missing genotype values must be coded as `999`
 
-
-## Quick start
-
-### Option 1 — Run the `.Rmd` file in RStudio
-
-1. Put `data_analysis_mlp.Rmd` and `Table_data.tsv` in the same folder
-2. Open `data_analysis_mlp.Rmd` in RStudio
-3. Install the required packages
-4. Click **Knit**
-
-This will generate the HTML report and output files.
-
-### Option 2 — Run the `.R` script from the terminal
-
-If you use the script version of the workflow (`data_analysis_mlp.R`), you can run it directly from the terminal:
-
-```bash
-Rscript data_analysis_mlp.R
-```
-
+---
 
 ## Main outputs
 
@@ -117,13 +150,24 @@ Rscript data_analysis_mlp.R
 | `asex_mll_Locations.png` | Asexual lineage abundance across locations |
 | `asex_mll_Year_Locations.png` | Combined lineage abundance figure |
 
+---
+
 ## Notes
 
-- The `.Rmd` file is the main reproducible workflow for generating the report
-- The `.R` file is useful for command-line or terminal-based execution
+- The `.R` script is the main reproducible workflow for generating the report
+- The Docker image (`ghcr.io/ammarabdalrahem/poplar_rust:1.0`) contains R 4.4.1 and all required packages pre-installed
 - Isolates with uncertain cluster assignment are excluded from downstream analyses
 - Most output files are written to the working directory
 
+---
+
+## Citation
+
+If you use this workflow or the associated Docker image, please cite:
+
+> Abdalrahem, A., et al. (2026). Long-lasting coexistence of multiple asexual lineages alongside their sexual counterparts in a fungal plant pathogen.
+
+---
 
 ## License
 

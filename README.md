@@ -35,9 +35,9 @@ The entire analysis environment is packaged in a Docker image. No R installation
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (free, works on macOS / Windows / Linux)
 
-### Verified setup (used by the data editor)
+### First option
 
-The analysis was reviewed and verified using the `rocker/geospatial:4.4.1` image:
+The analysis using the `rocker/geospatial:4.4.1` image:
 
 ```bash
 # 1. Clone the repository
@@ -54,7 +54,7 @@ docker run --rm \
 
 > **On Windows PowerShell**, replace `$(pwd)` with `${PWD}`.
 
-### Custom pre-built image (all packages pre-installed)
+### Second option: custom pre-built image (all packages pre-installed)
 
 A ready-to-run image with every dependency baked in is published to the GitHub
 Container Registry. No build step is required:
@@ -82,7 +82,7 @@ Pushing a tag such as `v1.0` publishes both `:1.0` and `:latest`.
 
 For long-term reproducibility, package versions are frozen:
 
-- **Base image:** `rocker/geospatial:4.4.1` (R 4.4.1 + the full geospatial stack, the environment verified by the data editor)
+- **Base image:** `rocker/geospatial:4.4.1` (R 4.4.1 + the full geospatial stack)
 - **CRAN:** pinned to a dated [Posit Package Manager](https://packagemanager.posit.co/) snapshot (`PKG_SNAPSHOT` build arg) so the same versions resolve on every build
 - **Bioconductor:** pinned to release `3.20`
 - **GitHub packages:** `rnaturalearthhires` pinned to an exact commit
@@ -190,7 +190,7 @@ Requirements:
 | `MST_data_mlp_pop_as_Reproduction_for_cloneEstimate.csv` | Minimum-spanning-tree export for ClonEstiMate | — |
 
 > **Note on Table 1 — Pareto β column:** this statistic is computed by the external
-> software [GenAPoPop](https://www6.inrae.fr/genapopop) and cannot be produced by
+> software [GenAPoPop](https://forge.inrae.fr/solenn.stoeckel/genapopop1.0) and cannot be produced by
 > this R script. Run GenAPoPop separately on the same isolate data and insert the
 > resulting Pareto β values into the exported CSV before final publication.
 
@@ -219,7 +219,7 @@ Requirements:
 ## Notes
 
 - `data_analysis_mlp_new.R` and `data_analysis_mlp.Rmd` produce **identical outputs** with identical file names
-- The Docker image `rocker/geospatial:4.4.1` (verified by the PCI data editor) and the custom image `ghcr.io/ammarabdalrahem/poplar_rust:1.0` both contain R 4.4.1 with all required packages
+- The Docker image `rocker/geospatial:4.4.1` and the custom image `ghcr.io/ammarabdalrahem/poplar_rust:1.0` both contain R 4.4.1 with all required packages
 - When run outside Docker, the script installs any missing packages automatically in dependency-ordered layers (CRAN core → spatial → genetics → Bioconductor → GitHub); a first run on a clean R installation may take several minutes
 - Isolates with uncertain cluster assignment are excluded from downstream analyses
 - The **Pareto β** column in Table 1 requires a separate GenAPoPop run (see note above)
@@ -228,9 +228,22 @@ Requirements:
 
 ## Citation
 
-If you use this workflow or the associated Docker image, please cite:
+This repository accompanies the article below. If you use this workflow or the
+Docker image, please cite **both** the article and the archived software.
 
-> Abdalrahem, A., et al. (2026). Long-lasting coexistence of multiple asexual lineages alongside their sexual counterparts in a fungal plant pathogen.
+**Article (preprint)**
+
+> Abdalrahem, A., Andrieux, A., Becheler, R., Duplessis, S., Frey, P.,
+> Marçais, B., Schiffer-Forsyth, K., Stoeckel, S., & Halkett, F. (2025).
+> *Long-lasting coexistence of multiple asexual lineages alongside their sexual
+> counterparts in a fungal plant pathogen.* bioRxiv 2025.03.28.645883.
+> https://doi.org/10.1101/2025.03.28.645883
+
+**Software / data archive (this repository)**
+
+> Abdalrahem, A. (2025). *poplar_rust: population-genetics workflow for*
+> Melampsora larici-populina [Software]. Zenodo.
+> https://doi.org/10.5281/zenodo.15100450
 
 ---
 

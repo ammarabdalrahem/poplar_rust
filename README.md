@@ -61,13 +61,17 @@ Container Registry. No build step is required:
 
 ```bash
 # Pull the latest published image
-docker pull ghcr.io/ammarabdalrahem/poplar_rust:latest
+docker pull --platform linux/amd64 ghcr.io/ammarabdalrahem/poplar_rust:latest
 
 # Run it, collecting results into ./output on your machine
-docker run --rm \
+docker run --platform linux/amd64 --rm \
   -v "$(pwd)/output:/project/output" \
   ghcr.io/ammarabdalrahem/poplar_rust:latest
 ```
+
+> **Apple Silicon (M1/M2/M3) Macs:** the `--platform linux/amd64` flag is required.
+> The image is built for `amd64` and runs through Docker's built-in emulation.
+> On Intel and Linux machines, the flag is harmless — that platform is already native.
 
 > **On Windows PowerShell**, replace `$(pwd)` with `${PWD}`.
 

@@ -101,10 +101,6 @@ For long-term reproducibility, package versions are frozen:
 | `.github/workflows/docker-publish.yml` | CI: builds the image and publishes it to GHCR |
 | `README.md` | This file |
 
-> The script also accepts a tab-separated `Table_S1.tsv`: if only the `.tsv` is
-> present it is converted to `Table_S1.csv` on first run. This repository ships
-> the `.csv` directly.
-
 ---
 
 ## Manual setup (without Docker)

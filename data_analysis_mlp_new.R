@@ -13,21 +13,75 @@
 #' 
 #' ## Installation of required packages
 #' 
-## ----include=FALSE----------------------------------------------------------------------------------------------------------------------------------------------
-# Load required packages only
+## ----include=FALSE----
+# Install (if necessary) and load required packages.
+# Packages are installed in dependency-ordered layers so that prerequisites
+# (e.g. sf, terra, units) are built before the packages that depend on them.
+# Installing everything in a single call can fail because packages with
+# heavy system dependencies start building before their prerequisites exist.
 
-packages <- c(
-  "lme4", "knitr", "ggplot2", "readxl", "tidyverse",
-  "genepop", "hierfstat", "mapdata", "mapplots",
-  "adegenet", "poppr", "pegas", "ape",
-  "cowplot", "ade4", "viridis", "ggrepel", "ggsci",
-  "scales", "dplyr", "factoextra", "sf",
-  "rnaturalearth", "rnaturalearthdata", "rnaturalearthhires",
-  "svglite", "reshape2", "ggpubr", "ggforce",
-  "ggtree", "ggtreeExtra", "RClone"
-)
+options(repos = c(CRAN = "https://cloud.r-project.org"))
 
-lapply(packages, library, character.only = TRUE)
+install_if_missing <- function(pkgs, bioc = FALSE) {
+  missing <- pkgs[!pkgs %in% rownames(installed.packages())]
+  if (!length(missing)) return(invisible(NULL))
+  message("Installing: ", paste(missing, collapse = ", "))
+  if (bioc) {
+    BiocManager::install(missing, ask = FALSE, update = FALSE, Ncpus = 1)
+  } else {
+    install.packages(missing, Ncpus = 1)
+  }
+}
+
+# 1. CRAN core
+cran_core <- c("knitr", "ggplot2", "readxl", "tidyverse", "cowplot",
+               "viridis", "ggrepel", "ggsci", "scales", "dplyr",
+               "factoextra", "grid", "svglite", "reshape2")
+install_if_missing(cran_core)
+
+# 2. Spatial stack
+cran_spatial <- c("sf", "rnaturalearth", "rnaturalearthdata",
+                   "mapdata", "mapplots")
+install_if_missing(cran_spatial)
+# rnaturalearthhires is hosted on r-universe (not CRAN); required for scale = "large"
+if (!"rnaturalearthhires" %in% rownames(installed.packages())) {
+  install.packages("rnaturalearthhires",
+                   repos = "https://ropensci.r-universe.dev")
+}
+
+# 3. Genetics / bio (CRAN)
+cran_bio <- c("lme4", "genepop", "hierfstat", "adegenet",
+              "poppr", "pegas", "ape", "ade4")
+install_if_missing(cran_bio)
+
+# 4. Bioconductor setup (version locked to match R 4.4.x)
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+BiocManager::install(version = "3.20", ask = FALSE, update = FALSE)
+
+# 5. Bioconductor packages
+install_if_missing(c("ggtree", "ggtreeExtra"), bioc = TRUE)
+
+# 6. GitHub package: RClone
+if (!"RClone" %in% rownames(installed.packages())) {
+  if (!requireNamespace("devtools", quietly = TRUE)) install.packages("devtools")
+  tryCatch(
+    devtools::install_github("dbailleul/RClone", dependencies = FALSE),
+    error = function(e) message("RClone install failed: ", e$message)
+  )
+}
+
+# Load all packages
+all_pkgs <- c(cran_core, cran_spatial, "rnaturalearthhires", cran_bio,
+              "ggtree", "ggtreeExtra", "RClone")
+invisible(lapply(all_pkgs, function(p) {
+  if (requireNamespace(p, quietly = TRUE)) {
+    suppressPackageStartupMessages(library(p, character.only = TRUE))
+  } else {
+    message("Skipping missing package: ", p)
+  }
+}))
 
 #' 
 #' 
@@ -35,16 +89,20 @@ lapply(packages, library, character.only = TRUE)
 #' ### Data retrieval
 #' 
 ## ----include=FALSE----------------------------------------------------------------------------------------------------------------------------------------------
-# get the path of the current R script
+# Set working directory to the script's own location
 setwd(dirname(normalizePath("data_analysis_mlp_new.R")))
 
-# check the current working directory
-getwd()
+# Create output sub-directories (figures and tables)
+dir.create("output/figures", recursive = TRUE, showWarnings = FALSE)
+dir.create("output/tables",  recursive = TRUE, showWarnings = FALSE)
 
+# Convert Table_S1.tsv → Table_S1.csv on first run (one-time conversion)
+if (!file.exists("Table_S1.csv") && file.exists("Table_S1.tsv")) {
+  write_csv(read_tsv("Table_S1.tsv", show_col_types = FALSE), "Table_S1.csv")
+}
 
-
-# import the data from tsv
-general_data <- read_tsv("Table_data.tsv")
+# Import data from CSV
+general_data <- read_csv("Table_S1.csv", show_col_types = FALSE)
 
 # covert data to data frame
 general_data <- as.data.frame(general_data) 
@@ -55,13 +113,24 @@ general_data <- general_data[!(general_data$Pop == "NA"), ]
 general_data <- general_data %>%
   mutate(across(where(is.character), ~ gsub("°", "", .)))
 
+# Standardise Dept names: use Dept # as the authoritative key.
+# Catches known variants (missing hyphens, missing accents) that have been
+# observed in different versions of the dataset.
+dept_canonical <- c(
+  "04" = "Alpes-de-Haute-Provence",  # also seen as 'Alpes de Haute-Provence'
+  "34" = "Hérault",                  # also seen as 'Herault' (missing accent)
+  "54" = "Meurthe-et-Moselle"        # also seen as 'Meurthe-et Moselle'
+)
+fix_mask <- general_data[["Dept #"]] %in% names(dept_canonical)
+general_data$Dept[fix_mask] <- dept_canonical[general_data[["Dept #"]][fix_mask]]
+
 
 
 
 
 #' 
-## ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-head(general_data) 
+## ----
+invisible(head(general_data))
 
 #' 
 #' ## Figure shows the sample collections sites and stratigies
@@ -179,7 +248,7 @@ p
 
 # Optional editable SVG (often very convenient in Inkscape)
 # install.packages("svglite")
-ggsave("Fig1A_map.svg", p, device = svglite::svglite,
+ggsave("output/figures/FigS1_geographic_distribution.svg", p, device = svglite::svglite,
        width = 250, height = 190, units = "mm")
 
 
@@ -354,8 +423,7 @@ my_kmeans <- function(x, k) {
 fviz_nbclust(scores, my_kmeans, method = "silhouette", k.max = 20)
 
 # save the plot
-png("Silhouette_kmeans.png", width = 1200, height = 800, res = 150)
-# Plot silhouette results
+png("output/figures/FigS2_Silhouette_kmeans.png", width = 1200, height = 800, res = 150)
 fviz_nbclust(scores, my_kmeans, method = "silhouette", k.max = 20)
 dev.off()
 
@@ -377,7 +445,7 @@ mean_success  <- as.numeric(xval$`Mean Successful Assignment by Number of PCs of
 opt_pcs       <- as.numeric(xval$`Number of PCs Achieving Highest Mean Success`)
 
 # Save plot of mean successful assignment vs number of PCs
-png("Dapc_xval.png", width = 1200, height = 800, res = 150)
+png("output/figures/Dapc_xval.png", width = 1200, height = 800, res = 150)
 plot(n_pcs_tested, mean_success,
      type = "b", pch = 19, col = "blue",
      xlab = "Number of PCs",
@@ -402,7 +470,7 @@ dapc1 <- dapc(data_GenInd, grp$grp, n.pca = opt_pcs, n.clust = 2, n.da = 1)
 scatter(dapc1) # scatter plot of DAPC results
 
 # save DAPC scatter plot
-png("DAPC_scatter.png", width = 1200, height = 1000, res = 150)
+png("output/figures/DAPC_scatter.png", width = 1200, height = 1000, res = 150)
 
 # Plot scatter
 scatter(dapc1,
@@ -415,7 +483,7 @@ scatter(dapc1,
 dev.off()
 
 
-png("DAPC_compoplot.png", width = 1200, height = 800, res = 150)
+png("output/figures/DAPC_compoplot.png", width = 1200, height = 800, res = 150)
 
 # Plot compoplot
 compoplot(dapc1,
@@ -467,7 +535,7 @@ cluster_assignments <- ggplot(melted_data, aes(x = Cluster, y = Probability, col
 
 cluster_assignments
 
-ggsave("cluster_assignments.png", cluster_assignments, width = 8, height = 6, dpi = 1200, bg = "transparent")  
+ggsave("output/figures/FigS3_cluster_assignments.png", cluster_assignments, width = 8, height = 6, dpi = 1200, bg = "white")
 
 
 #reomve uncertin cluster
@@ -579,11 +647,30 @@ for (i in 1:Nb_Pop){
 }
 
 
-## Mise en forme du tableau final
-Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis, Fis_sd, Fis_var, rbarD)
+## Final table - genetic indices per cluster (manuscript Table 1)
+MLG <- Table_PPR$MLG[1:Nb_Pop]
+MLL <- sapply(Pop, function(p) {
+  length(unique(genotype_data$organised_MLL[genotype_data$Cluster == p]))
+})
+
+Tab_Indices_per_pop <- rbind(N, MLG, MLL, GsurN, Ar, Ho, Hs, Fis, Fis_var, rbarD)
 colnames(Tab_Indices_per_pop) <- Pop
 Tab_Indices_per_pop <- t(Tab_Indices_per_pop)
-kable(Tab_Indices_per_pop, digits = 3)
+
+# Column names follow manuscript Table 1.
+# Pareto beta is not computed by this script; add it from the manuscript
+# methods if an exact match to the published Table 1 is required.
+colnames(Tab_Indices_per_pop) <- c("N", "MLG", "MLL", "R", "Ar",
+                                   "Ho", "He", "Fis", "Var (FIS)", "rd")
+invisible(kable(Tab_Indices_per_pop, digits = 3))
+
+# Export Table 1 as CSV
+write.csv(
+  data.frame(Cluster = rownames(Tab_Indices_per_pop), Tab_Indices_per_pop,
+             check.names = FALSE),
+  file = "output/tables/Table1_a_genetic_indices_cluster_approach.csv",
+  row.names = FALSE
+)
 
 
 #' 
@@ -690,7 +777,9 @@ mll_year_df <- mll_year_df[!(mll_year_df$YearCount == 1), ]
 #mll_year_df [mll_year_df$organised_MLL == 1, ]
 
 # Print the contingency table
-write.table(mll_year_df, file = "filtered_mll_years.csv", sep = ",", quote = FALSE, row.names = FALSE)
+# write.csv quotes the Years column (which contains commas), so the header
+# and data rows always have a matching number of columns.
+write.csv(mll_year_df, file = "output/tables/filtered_mll_years.csv", row.names = FALSE)
 
 #' 
 #' 
@@ -753,7 +842,7 @@ final_GenInd <- df2genind(
 
 Nb_Pop = length(levels(final_GenInd@pop))
 
-# Assigned the vectors to be 
+# Assigned the vectors to be
 N <- vector(mode ="integer", length = Nb_Pop)
 GsurN<- vector(mode ="numeric", length = Nb_Pop)
 Ho <- vector(mode ="numeric", length = Nb_Pop)
@@ -761,6 +850,7 @@ Hs <- vector(mode ="numeric", length = Nb_Pop)
 Fis <- vector(mode ="numeric", length = Nb_Pop)
 rbarD<- vector(mode ="numeric", length = Nb_Pop)
 Fis_sd <- vector(mode ="numeric", length = Nb_Pop)
+Fis_var <- vector(mode ="numeric", length = Nb_Pop)
 
 Pop <- levels(final_GenInd$pop)
 
@@ -775,7 +865,7 @@ GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   Temp_Sample <- popsub(final_GenInd, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 9, plot = F)[4] # Attention c'est assez long à tourner 
+  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] # Attention c'est assez long à tourner 
 }
 
 
@@ -803,11 +893,23 @@ for (i in 1:Nb_Pop){
   Ar[i] = mean(Ar_per_loc[,i])
 }
 
-## Final Table
-Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis, rbarD,Fis_sd,Fis_var)
+## Final table - genetic indices per reproduction mode (resampling approach)
+MLG <- Table_PPR$MLG[1:Nb_Pop]
+MLL <- sapply(Pop, function(p) {
+  length(unique(genotype_data$organised_MLL[genotype_data$Mll_persistence == p]))
+})
+Tab_Indices_per_pop <- rbind(N, MLG, MLL, GsurN, Ar, Ho, Hs, Fis, Fis_var, rbarD)
 colnames(Tab_Indices_per_pop) <- Pop
 Tab_Indices_per_pop <- t(Tab_Indices_per_pop)
-kable(Tab_Indices_per_pop, digits = 3)
+colnames(Tab_Indices_per_pop) <- c("N", "MLG", "MLL", "R", "Ar",
+                                   "Ho", "He", "Fis", "Var (FIS)", "rd")
+invisible(kable(Tab_Indices_per_pop, digits = 3))
+write.csv(
+  data.frame(Reproduction = rownames(Tab_Indices_per_pop), Tab_Indices_per_pop,
+             check.names = FALSE),
+  file = "output/tables/Table1_b_genetic_indices_resampling_approach.csv",
+  row.names = FALSE
+)
 
 
 #' 
@@ -816,20 +918,23 @@ kable(Tab_Indices_per_pop, digits = 3)
 #' 
 #' ### Fisher's exact test for the Clustering and resampling approches
 #' 
-## ----echo=FALSE-------------------------------------------------------------------------------------------------------------------------------------------------
+## ----echo=FALSE----
 # Create the contingency table
 contingency_table <- table(genotype_data$assignment, genotype_data$Mll_persistence)
-
-# Print the contingency table
-print(contingency_table)
 
 # Rename the rows and columns of the contingency table
 rownames(contingency_table) <- c("Asex_cluster", "Sex_cluster")
 colnames(contingency_table) <- c("Asex_resampling", "Sex_resampling")
 
-# Fisher's exact test 
+# Fisher's exact test
 fisher_test <- fisher.test(contingency_table)
-print(fisher_test)
+message("Fisher exact test p-value: ", fisher_test$p.value)
+
+# Save Table 2: contingency table (clustering vs resampling approach)
+write.csv(
+  as.data.frame.matrix(contingency_table),
+  file = "output/tables/Table2_contingency_clustering_vs_resampling.csv"
+)
 
 
 
@@ -881,6 +986,7 @@ Hs <- vector(mode ="numeric", length = Nb_Pop)
 Fis <- vector(mode ="numeric", length = Nb_Pop)
 rbarD<- vector(mode ="numeric", length = Nb_Pop)
 Fis_sd <- vector(mode ="numeric", length = Nb_Pop)
+Fis_var <- vector(mode ="numeric", length = Nb_Pop)
 
 Pop <- levels(final_GenInd$pop)
 
@@ -895,7 +1001,7 @@ GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   Temp_Sample <- popsub(final_GenInd, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 9, plot = F)[4] 
+  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] 
 }
 
 
@@ -923,15 +1029,27 @@ for (i in 1:Nb_Pop){
   Ar[i] = mean(Ar_per_loc[,i])
 }
 
-## Final table
-Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis, rbarD,Fis_sd, Fis_var)
+## Final table - genetic indices per reproduction mode (combined approach)
+MLG <- Table_PPR$MLG[1:Nb_Pop]
+MLL <- sapply(Pop, function(p) {
+  length(unique(genotype_data$organised_MLL[genotype_data$Reproduction == p]))
+})
+Tab_Indices_per_pop <- rbind(N, MLG, MLL, GsurN, Ar, Ho, Hs, Fis, Fis_var, rbarD)
 colnames(Tab_Indices_per_pop) <- Pop
 Tab_Indices_per_pop <- t(Tab_Indices_per_pop)
-kable(Tab_Indices_per_pop, digits = 3)
+colnames(Tab_Indices_per_pop) <- c("N", "MLG", "MLL", "R", "Ar",
+                                   "Ho", "He", "Fis", "Var (FIS)", "rd")
+invisible(kable(Tab_Indices_per_pop, digits = 3))
+write.csv(
+  data.frame(Reproduction = rownames(Tab_Indices_per_pop), Tab_Indices_per_pop,
+             check.names = FALSE),
+  file = "output/tables/Table1_c_genetic_indices_combination_approaches.csv",
+  row.names = FALSE
+)
 
 
-#save the result 
-write.table(genotype_data, file = "new_genotype_data.csv", sep = ",", quote = FALSE, row.names = TRUE)
+# Save the per-isolate result table
+write.csv(genotype_data, file = "output/tables/new_genotype_data.csv")
 
 #clean
 #rm (Ar_per_loc, data_Fstat, fstat_basic_Temporel, Obj_Ar, Poptmp , Table_PPR, Temp_Sample)
@@ -1026,11 +1144,48 @@ for (i in 1:Nb_Pop){
   Ar[i] = mean(Ar_per_loc[,i])
 }
 
-# Final Table
-Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis, rbarD,Fis_sd,Fis_var)
+# Final table - genetic indices per asexual MLL
+Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis, rbarD, Fis_sd, Fis_var)
 colnames(Tab_Indices_per_pop) <- Pop
 Tab_Indices_per_mll <- t(Tab_Indices_per_pop)
-kable(head(Tab_Indices_per_mll, 10), digits = 3)
+invisible(kable(head(Tab_Indices_per_mll, 10), digits = 3))
+
+# Manuscript Table 4: characteristics of the seven most abundant asexual MLLs
+mlg_per_mll <- aggregate(MLG ~ organised_MLL, data = Asex_data,
+                         FUN = function(x) length(unique(x)))
+year_range  <- aggregate(Year ~ organised_MLL, data = Asex_data,
+                         FUN = function(y) paste(min(y), max(y), sep = ":"))
+
+asex_mll_tab <- data.frame(
+  MLL = as.integer(rownames(Tab_Indices_per_mll)),
+  N   = Tab_Indices_per_mll[, "N"],
+  R   = Tab_Indices_per_mll[, "GsurN"],
+  AR  = Tab_Indices_per_mll[, "Ar"],
+  HO  = Tab_Indices_per_mll[, "Ho"],
+  HE  = Tab_Indices_per_mll[, "Hs"],
+  check.names = FALSE
+)
+asex_mll_tab$MLG <- mlg_per_mll$MLG[match(asex_mll_tab$MLL, mlg_per_mll$organised_MLL)]
+asex_mll_tab$`Year range` <- year_range$Year[match(asex_mll_tab$MLL,
+                                                   year_range$organised_MLL)]
+
+# Keep the seven most abundant lineages, columns ordered as in the manuscript
+asex_mll_tab <- asex_mll_tab[order(asex_mll_tab$N, decreasing = TRUE), ]
+asex_mll_tab <- head(asex_mll_tab[, c("MLL", "MLG", "N", "Year range",
+                                      "R", "AR", "HO", "HE")], 7)
+
+invisible(kable(asex_mll_tab, digits = 3, row.names = FALSE))
+# Save full per-MLL table for all asexual lineages
+write.csv(
+  data.frame(MLL = rownames(Tab_Indices_per_mll), Tab_Indices_per_mll,
+             check.names = FALSE),
+  file = "output/tables/Table_asexual_MLL_genetic_indices.csv",
+  row.names = FALSE
+)
+# Save Table 4: top 7 most abundant asexual MLLs
+write.csv(asex_mll_tab,
+          file = "output/tables/Table4_top7_asexual_MLLs.csv",
+          row.names = FALSE)
 
 
 
@@ -1133,11 +1288,17 @@ for (i in 1:Nb_Pop){
   Ar[i] = mean(Ar_per_loc[,i])
 }
 
-## final table
-Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis, rbarD,Fis_sd,Fis_var)
+## Final table - genetic indices per sexual MLL
+Tab_Indices_per_pop <- rbind(N, GsurN, Ar, Ho, Hs, Fis, rbarD, Fis_sd, Fis_var)
 colnames(Tab_Indices_per_pop) <- Pop
 Tab_Indices_per_mll <- t(Tab_Indices_per_pop)
-kable(head(Tab_Indices_per_mll, 10), digits = 3)
+invisible(kable(head(Tab_Indices_per_mll, 10), digits = 3))
+write.csv(
+  data.frame(MLL = rownames(Tab_Indices_per_mll), Tab_Indices_per_mll,
+             check.names = FALSE),
+  file = "output/tables/genetic_indices_per_sexual_MLL.csv",
+  row.names = FALSE
+)
 
 # Assuming 'Sex_data' is your data frame containing MLG and MLL information
 mlg_counts <- aggregate(MLG ~ organised_MLL, data = Sex_data, FUN = function(x) length(unique(x)))
@@ -1286,9 +1447,7 @@ p2
 
 
 
-ggsave("tree_plot1.png", p, width = 17, height = 8, dpi = 1200, bg = "transparent")  
-
-ggsave("tree_plot2.png", p2, width = 12, height = 9, dpi = 1200, bg = "transparent")  
+ggsave("output/figures/Fig3_tree_nj_plot.png",  p2, width = 12, height = 9, dpi = 1200, bg = "white")
 
 
 #' 
@@ -1327,12 +1486,12 @@ transparent_colors <- adjustcolor(profile_color_mapping, alpha.f = 0.7)
 
 
 # The plot of the pie chart above the map
-png(filename = "map_all_years.png", units="cm", width = 18, height = 15, res = 1200, bg = "transparent")
+png(filename = "output/figures/map_all_years.png", units="cm", width = 18, height = 15, res = 1200, bg = "white")
 
 
 par(mai = c(0, 0, 0, 0), omi = c(0, 0, 0, 0), 
     mgp = c(2.5, 0.5, 0))
-basemap(xlim = c(-4.3, 9.1), ylim = c(41, 51), bg = "transparent", axes=FALSE)
+basemap(xlim = c(-4.3, 9.1), ylim = c(41, 51), bg = "white", axes=FALSE)
 map("france", fill = FALSE, col = "black", add = FALSE)
 final_map <- draw.pie(xyz$x, xyz$y, xyz$z, radius = 0.3, col = transparent_colors) # par size ref
 
@@ -1373,10 +1532,10 @@ transparent_colors <- adjustcolor(profile_color_mapping, alpha.f = 0.7)
 
 
 # The plot of the pie chart above the map
-png(filename = "map_2009_2011.png",units="cm", width = 18, height = 15, res = 1200, bg = "transparent")
+png(filename = "output/figures/Fig2_geographical_distribution_2009_2011.png", units="cm", width = 18, height = 15, res = 1200, bg = "white")
 
 par(mai = c(0, 0, 0, 0), bty = "n")
-basemap(xlim = c(-4.3, 9.1), ylim = c(41, 51), bg = "transparent", axes=FALSE)
+basemap(xlim = c(-4.3, 9.1), ylim = c(41, 51), bg = "white", axes=FALSE)
 map("france", fill = FALSE, col = "black", add = TRUE)
 
 final_map <- draw.pie(xyz$x, xyz$y, xyz$z, radius = 0.3, col = transparent_colors) 
@@ -1431,19 +1590,15 @@ regression <- glm(formula = cbind(nbsex, nbAsex) ~ Lat + Long + Year,
                   family = binomial)
 
 
-# Display the summary of the regression model
-summary(regression)
+invisible(summary(regression))
 
-
-# Fit the GLMM with Year as a random effect
+# Fit the GLMM with Year as a random effect (all years)
 glmm_model <- glmer(
-  formula = cbind(nbsex, nbAsex) ~ Lat + Long + (1 | Year),  # Year as random effect
+  formula = cbind(nbsex, nbAsex) ~ Lat + Long + (1 | Year),
   data = final_table,
   family = binomial
 )
-
-# Display the summary of the GLMM
-summary(glmm_model)
+invisible(summary(glmm_model))
 
 
 
@@ -1465,8 +1620,7 @@ regression_filtered <- glm(formula = cbind(nbsex, nbAsex) ~ Lat + Long + Year,
                            data = final_table_filtered,
                            family = binomial)
 
-# Display the summary of the regression model
-summary(regression_filtered)
+invisible(summary(regression_filtered))
 
 # Create Prediction Data combination of Lat and Long with only the years 2009 and 2011
 # Generate predictions: Apply the logistic regression model to this grid to predict the probability of sexual reproduction for each combination of latitude, longitude, and year.
@@ -1500,10 +1654,10 @@ p_lat_filtered <- ggplot(final_table_filtered, aes(x = Lat, y = nbsex / (nbsex +
     panel.grid.minor = element_blank()  # Remove minor gridlines for clarity
   )
 
-p_lat_filtered
+#p_lat_filtered
 
 # Save the plot
-ggsave("effect_of_latitude_filtered.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 1200)
+#ggsave("output/figures/FigS4_effect_of_latitude.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 1200, bg = "white")
 
 
 
@@ -1516,8 +1670,16 @@ glmm_model <- glmer(
   family = binomial
 )
 #Summary of the GLMM
-summary(glmm_model)
+invisible(summary(glmm_model))
 
+# Save Table 3: GLMM fixed-effect coefficients (Lat, Long → reproductive mode)
+glmm_coef <- as.data.frame(summary(glmm_model)$coefficients)
+glmm_coef <- cbind(Predictor = rownames(glmm_coef), glmm_coef)
+rownames(glmm_coef) <- NULL
+colnames(glmm_coef) <- c("Predictor", "Estimate", "Std.Error", "z.value", "p.value")
+write.csv(glmm_coef,
+          file = "output/tables/Table3_GLMM_binomial_regression.csv",
+          row.names = FALSE)
 
 # Create prediction data for Latitude, holding Long at median, with 2009 and 2011
 prediction_data_filtered <- expand.grid(
@@ -1569,8 +1731,7 @@ p_lat_filtered <- ggplot(final_table_filtered, aes(x = Lat, y = nbsex / (nbsex +
 
 p_lat_filtered
 
-# Optional: Save the plot
-ggsave("effect_of_latitude_glmm.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 1200)
+ggsave("output/figures/FigS4_effect_of_latitude_glmm.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 1200, bg = "white")
 
 
 #' 
@@ -1638,8 +1799,8 @@ colnames(MST_data)[grep("Var", colnames(MST_data))] <- ""
 
 
 
-# Read the CSV file and set the first column as row names
-new_genotype_data <- read.csv("new_genotype_data.csv", row.names = 1)
+# Read the per-isolate results table
+new_genotype_data <- read.csv("output/tables/new_genotype_data.csv", row.names = 1)
 
 
 # Check the Reproduction status in new_genotype_data and update the color in MST_data
@@ -1660,13 +1821,14 @@ for (i in seq_len(nrow(MST_data))) {
 }
 
 
-# View the final MST data
-head(MST_data)
-
 # Remove any rows have missing data (999)
 
 
-write.table(MST_data, "MST_data_mlp_pop_as_Reproduction_for_cloneEstimate.txt", sep = "\t",quote = FALSE, row.names = FALSE, col.names =TRUE)
+# Note: ClonEstiMate requires paired unnamed allele columns; write.table with
+# sep="," preserves that structure in CSV format.
+write.table(MST_data,
+            "output/tables/MST_data_mlp_pop_as_Reproduction_for_cloneEstimate.csv",
+            sep = ",", quote = FALSE, row.names = FALSE, col.names = TRUE)
 
 #' 
 #' 
@@ -1719,7 +1881,7 @@ mll_years <- ggplot(asexual_lineages_years, aes(x = Year, y = n, fill = as.facto
 
 mll_years
 
-ggsave("asex_mll_Year.png", mll_years, width = 17, height = 8, dpi = 1200, bg = "transparent")  # Save the plot with desired dimensions
+ggsave("output/figures/Fig4B_asex_mll_Year.png", mll_years, width = 17, height = 8, dpi = 1200, bg = "white")
 
 
 
@@ -1763,7 +1925,7 @@ mll_locations <- ggplot(asexual_lineages_locations, aes(x = n, y = Location, fil
 
 mll_locations
 
-ggsave("asex_mll_Locations.png", mll_locations, width = 17, height = 8, dpi = 1200, bg = "transparent")  # Save the plot with desired dimensions
+ggsave("output/figures/Fig4A_asex_mll_Locations.png", mll_locations, width = 17, height = 8, dpi = 1200, bg = "white")
 
 
 
@@ -1780,7 +1942,7 @@ combined_plot <- plot_grid(
 
 combined_plot
 
-ggsave("asex_mll_Year_Locations.png", combined_plot, width = 10, height = 8, dpi = 1200, bg = "transparent")  # Save the plot with desired dimensions
+ggsave("output/figures/Fig4_asex_mll_Year_Locations.png", combined_plot, width = 10, height = 8, dpi = 1200, bg = "white")
 
 
 
@@ -1801,14 +1963,9 @@ contingency_table_year_mll <- asexual_lineages_years %>%
   pivot_wider(names_from = MLL, values_from = n, values_fill = list(n = 0)) # Reshape to wide format
 
 
-print(contingency_table_year_mll)
-
-# Fisher's exact test for each MLL
-# Convert contingency table to matrix (excluding the Year column)
-fisher_matrix_year_mll <- as.matrix(contingency_table_year_mll[, -1]) 
-
-fisher_result_year_mll <- fisher.test(fisher_matrix_year_mll, simulate.p.value = TRUE, B = 1e5) # 100,000 simulations
-print(fisher_result_year_mll)
+fisher_matrix_year_mll <- as.matrix(contingency_table_year_mll[, -1])
+fisher_result_year_mll <- fisher.test(fisher_matrix_year_mll, simulate.p.value = TRUE, B = 1e5)
+message("Fisher test (Year x MLL) p-value: ", fisher_result_year_mll$p.value)
 
 
 asexual_lineages_locations <- dat1 %>%
@@ -1823,13 +1980,9 @@ asexual_lineages_locations <- dat1 %>%
 contingency_table_location_mll <- asexual_lineages_locations %>%
   pivot_wider(names_from = MLL, values_from = n, values_fill = list(n = 0)) # Reshape to wide format
 
-print(contingency_table_location_mll)
-
-# Convert contingency table to matrix (excluding the Location column)
 fisher_matrix_locations_mll <- as.matrix(contingency_table_location_mll[, -1])
-
-fisher_result_locations_mll <- fisher.test(fisher_matrix_locations_mll, simulate.p.value = TRUE, B = 1e5) # 100,000 simulations
-print(fisher_result_locations_mll)
+fisher_result_locations_mll <- fisher.test(fisher_matrix_locations_mll, simulate.p.value = TRUE, B = 1e5)
+message("Fisher test (Location x MLL) p-value: ", fisher_result_locations_mll$p.value)
 
 
 #' 

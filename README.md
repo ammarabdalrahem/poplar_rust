@@ -35,34 +35,40 @@ The entire analysis environment is packaged in a Docker image. No R installation
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (free, works on macOS / Windows / Linux)
 
-### First option
+## How to run
 
-The analysis using the `rocker/geospatial:4.4.1` image:
+Four ways to run the workflow. All produce identical outputs in
+`output/figures/` (plots) and `output/tables/` (data tables).
+
+- [Option A: Run natively in R](#option-a-run-natively-in-r) — fastest; recommended for Apple Silicon Macs
+- [Option B: Pre-built Docker image](#option-b-pre-built-docker-image) — most reproducible, one command
+- [Option C: Stock rocker image](#option-c-stock-rocker-image) — the environment is good
+- [Option D: HPC cluster with Singularity](#option-d-hpc-cluster-with-singularity) — for shared compute clusters
+
+> **Performance note:** the Docker/Singularity images are built for `linux/amd64`.
+> On Intel, Linux, and HPC nodes they run natively. On **Apple Silicon (M-series)
+> Macs** they run through emulation, which is much slower — a full run can take
+> several hours. On Apple Silicon, prefer **Option A**.
+
+### Option A: Run natively in R
+
+Requires **R 4.4.1** or later (RStudio optional, for interactive use).
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/ammarabdalrahem/poplar_rust.git
 cd poplar_rust
-
-# 2. Run the analysis
-docker run --platform linux/amd64 --rm \
-  -v "$(pwd):/project" \
-  -w /project \
-  rocker/geospatial:4.4.1 \
-  Rscript data_analysis_mlp_new.R
+Rscript data_analysis_mlp_new.R
 ```
 
-> **Apple Silicon (M1/M2/M3) Macs:** keep the `--platform linux/amd64` flag.
-> `rocker/geospatial` is published for `amd64` only, so it runs through Docker's
-> built-in emulation. On Intel and Linux machines the flag is harmless — already native.
+On the first run the script installs any missing R packages automatically
+(CRAN → Bioconductor → GitHub); this needs an internet connection and may take a
+few minutes. The analysis then runs at native speed. For interactive work, open
+`data_analysis_mlp.Rmd` in RStudio instead.
 
-> **On Windows PowerShell**, replace `$(pwd)` with `${PWD}`.
+### Option B: Pre-built Docker image
 
-
-### Second option: custom pre-built image (all packages pre-installed)
-
-A ready-to-run image with every dependency baked in is published to the GitHub
-Container Registry. No build step is required:
+A ready-to-run image with every dependency baked in, published to the GitHub
+Container Registry. No build step required.
 
 ```bash
 # Pull the latest published image
@@ -74,27 +80,61 @@ docker run --platform linux/amd64 --rm \
   ghcr.io/ammarabdalrahem/poplar_rust:latest
 ```
 
-> **Apple Silicon (M1/M2/M3) Macs:** the `--platform linux/amd64` flag is required.
-> The image is built for `amd64` and runs through Docker's built-in emulation.
-> On Intel and Linux machines, the flag is harmless — that platform is already native.
+To pin a specific version instead of `latest`, use the version tag, e.g.
+`ghcr.io/ammarabdalrahem/poplar_rust:1.0`.
 
 > **On Windows PowerShell**, replace `$(pwd)` with `${PWD}`.
 
+### Option C: Stock rocker image
+
+Runs the script inside the public `rocker/geospatial:4.4.1` image (the setup the
+data editor used to verify the analysis). Packages are installed at runtime, so
+the first run takes longer and needs internet.
+
+```bash
+git clone https://github.com/ammarabdalrahem/poplar_rust.git
+cd poplar_rust
+
+docker run --platform linux/amd64 --rm \
+  -v "$(pwd):/project" \
+  -w /project \
+  rocker/geospatial:4.4.1 \
+  Rscript data_analysis_mlp_new.R
+```
+
+> **On Windows PowerShell**, replace `$(pwd)` with `${PWD}`.
+
+### Option D: HPC cluster with Singularity
+
+For shared clusters where Docker isn't available. Works the same with
+**Apptainer** — just replace `singularity` with `apptainer` and the
+`SINGULARITY_` variables with `APPTAINER_`.
+
+```bash
+# 1. Many clusters mount /tmp as 'noexec', which breaks the SIF build.
+#    Point Singularity's temp + cache at an exec-allowed path (home or scratch).
+export SINGULARITY_TMPDIR=$HOME/sing_tmp
+export SINGULARITY_CACHEDIR=$HOME/sing_cache
+mkdir -p "$SINGULARITY_TMPDIR" "$SINGULARITY_CACHEDIR"
+
+# 2. Pull the image (creates poplar_rust_latest.sif)
+singularity pull docker://ghcr.io/ammarabdalrahem/poplar_rust:latest
+
+# 3. Run it. --pwd /project makes the script find its files;
+#    the bind mount writes results to ./output on the host.
+mkdir -p output
+singularity exec --pwd /project \
+  --bind "$(pwd)/output:/project/output" \
+  poplar_rust_latest.sif \
+  Rscript data_analysis_mlp_new.R
+```
+
+If `$HOME` is quota-limited or also `noexec`, use your cluster's scratch space
+(e.g. `/scratch/$USER`) for `SINGULARITY_TMPDIR` and `SINGULARITY_CACHEDIR`, or
+ask your HPC admin which filesystem permits execution.
+
 After the run, outputs appear in `output/figures/` and `output/tables/` inside your local project folder.
 
-### How the image is built and pinned
-
-The image is defined by the `Dockerfile` and rebuilt automatically by GitHub
-Actions (`.github/workflows/docker-publish.yml`) on every push to `main` and on
-each version tag, then pushed to `ghcr.io/ammarabdalrahem/poplar_rust`.
-Pushing a tag such as `v1.0` publishes both `:1.0` and `:latest`.
-
-For long-term reproducibility, package versions are frozen:
-
-- **Base image:** `rocker/geospatial:4.4.1` (R 4.4.1 + the full geospatial stack)
-- **CRAN:** pinned to a dated [Posit Package Manager](https://packagemanager.posit.co/) snapshot (`PKG_SNAPSHOT` build arg) so the same versions resolve on every build
-- **Bioconductor:** pinned to release `3.20`
-- **GitHub packages:** `rnaturalearthhires` pinned to an exact commit
 
 ---
 

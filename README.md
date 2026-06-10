@@ -1,4 +1,4 @@
-# Population Genetics of *Melampsora larici-populina*
+# Population Genetics of *Melampsora larici-populina* [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15100450.svg)](https://doi.org/10.5281/zenodo.15100450)
 
 Microsatellite-based workflow for population genetic analysis of *Melampsora larici-populina* isolates.
 

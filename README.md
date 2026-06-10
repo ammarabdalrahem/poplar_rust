@@ -153,16 +153,15 @@ Rscript data_analysis_mlp_new.R
 ```
 
 On first run the script will:
-1. Convert `Table_S1.tsv` → `Table_S1.csv` (subsequent runs read the CSV directly)
-2. Create `output/figures/` and `output/tables/` directories
-3. Write all outputs into those subdirectories
+1. Create `output/figures/` and `output/tables/` directories
+2. Write all outputs into those subdirectories
 
 ---
 
 ## Input format
 
 ```text
-Table_S1.tsv   (or Table_S1.csv after first run)
+Table_S1.csv
 ```
 
 Requirements:

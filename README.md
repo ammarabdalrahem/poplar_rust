@@ -45,14 +45,19 @@ git clone https://github.com/ammarabdalrahem/poplar_rust.git
 cd poplar_rust
 
 # 2. Run the analysis
-docker run --rm \
-  -v $(pwd):/project \
+docker run --platform linux/amd64 --rm \
+  -v "$(pwd):/project" \
   -w /project \
   rocker/geospatial:4.4.1 \
   Rscript data_analysis_mlp_new.R
 ```
 
+> **Apple Silicon (M1/M2/M3) Macs:** keep the `--platform linux/amd64` flag.
+> `rocker/geospatial` is published for `amd64` only, so it runs through Docker's
+> built-in emulation. On Intel and Linux machines the flag is harmless — already native.
+
 > **On Windows PowerShell**, replace `$(pwd)` with `${PWD}`.
+
 
 ### Second option: custom pre-built image (all packages pre-installed)
 

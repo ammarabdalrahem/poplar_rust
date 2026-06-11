@@ -535,7 +535,7 @@ cluster_assignments <- ggplot(melted_data, aes(x = Cluster, y = Probability, col
 
 cluster_assignments
 
-ggsave("output/figures/FigS3_cluster_assignments.png", cluster_assignments, width = 8, height = 6, dpi = 1200, bg = "white")
+ggsave("output/figures/FigS3_cluster_assignments.png", cluster_assignments, width = 8, height = 6, dpi = 600, bg = "white")
 
 
 #reomve uncertin cluster
@@ -617,7 +617,7 @@ GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   Temp_Sample <- popsub(data_GenInd_Cluster, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] 
+  ProbaLD[i] = ia(Temp_Sample, sample = 99, plot = F)[4] 
 }
 
 
@@ -865,7 +865,7 @@ GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   Temp_Sample <- popsub(final_GenInd, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] # Attention c'est assez long à tourner 
+  ProbaLD[i] = ia(Temp_Sample, sample = 99, plot = F)[4] # Attention c'est assez long à tourner 
 }
 
 
@@ -1001,7 +1001,7 @@ GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   Temp_Sample <- popsub(final_GenInd, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] 
+  ProbaLD[i] = ia(Temp_Sample, sample = 99, plot = F)[4] 
 }
 
 
@@ -1114,7 +1114,7 @@ GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   Temp_Sample <- popsub(data_GenInd_Asex_MLL, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4]  
+  ProbaLD[i] = ia(Temp_Sample, sample = 99, plot = F)[4]  
 }
 
 
@@ -1258,7 +1258,7 @@ GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   Temp_Sample <- popsub(data_GenInd_Sex_MLL, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] 
+  ProbaLD[i] = ia(Temp_Sample, sample = 99, plot = F)[4] 
 }
 
 
@@ -1447,7 +1447,7 @@ p2
 
 
 
-ggsave("output/figures/Fig3_tree_nj_plot.png",  p2, width = 12, height = 9, dpi = 1200, bg = "white")
+ggsave("output/figures/Fig3_tree_nj_plot.png",  p2, width = 12, height = 9, dpi = 600, bg = "white")
 
 
 #' 
@@ -1513,7 +1513,7 @@ dev.off()
 
 # Filter the data to include only the years 2009 and 2011
 pop_data <- genotype_data %>%
-  filter(Year == c("2009","2011")) %>% 
+  filter(Year %in% c("2009","2011")) %>% 
   group_by(Pop, Long, Lat, Reproduction) %>%
   summarize(n = n(), .groups = "drop") %>%  
   mutate(percent = n / sum(n)) %>%
@@ -1657,7 +1657,7 @@ p_lat_filtered <- ggplot(final_table_filtered, aes(x = Lat, y = nbsex / (nbsex +
 #p_lat_filtered
 
 # Save the plot
-#ggsave("output/figures/FigS4_effect_of_latitude.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 1200, bg = "white")
+#ggsave("output/figures/FigS4_effect_of_latitude.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 600, bg = "white")
 
 
 
@@ -1731,7 +1731,7 @@ p_lat_filtered <- ggplot(final_table_filtered, aes(x = Lat, y = nbsex / (nbsex +
 
 p_lat_filtered
 
-ggsave("output/figures/FigS4_effect_of_latitude_glmm.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 1200, bg = "white")
+ggsave("output/figures/FigS4_effect_of_latitude_glmm.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 600, bg = "white")
 
 
 #' 
@@ -1881,7 +1881,7 @@ mll_years <- ggplot(asexual_lineages_years, aes(x = Year, y = n, fill = as.facto
 
 mll_years
 
-ggsave("output/figures/Fig4B_asex_mll_Year.png", mll_years, width = 17, height = 8, dpi = 1200, bg = "white")
+ggsave("output/figures/Fig4B_asex_mll_Year.png", mll_years, width = 17, height = 8, dpi = 600, bg = "white")
 
 
 
@@ -1925,7 +1925,7 @@ mll_locations <- ggplot(asexual_lineages_locations, aes(x = n, y = Location, fil
 
 mll_locations
 
-ggsave("output/figures/Fig4A_asex_mll_Locations.png", mll_locations, width = 17, height = 8, dpi = 1200, bg = "white")
+ggsave("output/figures/Fig4A_asex_mll_Locations.png", mll_locations, width = 17, height = 8, dpi = 600, bg = "white")
 
 
 
@@ -1942,7 +1942,7 @@ combined_plot <- plot_grid(
 
 combined_plot
 
-ggsave("output/figures/Fig4_asex_mll_Year_Locations.png", combined_plot, width = 10, height = 8, dpi = 1200, bg = "white")
+ggsave("output/figures/Fig4_asex_mll_Year_Locations.png", combined_plot, width = 10, height = 8, dpi = 600, bg = "white")
 
 
 

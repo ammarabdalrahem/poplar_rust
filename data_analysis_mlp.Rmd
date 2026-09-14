@@ -11,6 +11,7 @@ date: "`r Sys.Date()`"
 
 
 
+
 ## Installation of required packages
 
 ```{r, include=FALSE}
@@ -98,6 +99,9 @@ if (!isTRUE(getOption("knitr.in.progress"))) {
     setwd(dirname(rstudioapi::getSourceEditorContext()$path))
   }
 }
+
+#print the path
+getwd()
 
 # Create output sub-directories (figures and tables)
 dir.create("output/figures", recursive = TRUE, showWarnings = FALSE)
@@ -535,7 +539,7 @@ geom_text_repel() # to avoid overlapping labels
 
 cluster_assignments
 
-ggsave("output/figures/FigS3_cluster_assignments.png", cluster_assignments, width = 8, height = 6, dpi = 600, bg = "white")
+ggsave("output/figures/FigS3_cluster_assignments.png", cluster_assignments, width = 8, height = 6, dpi = 1200, bg = "white")
 
 
 #reomve uncertin cluster
@@ -617,7 +621,7 @@ GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   Temp_Sample <- popsub(data_GenInd_Cluster, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 99, plot = F)[4]
+  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4]
 }
 
 
@@ -796,10 +800,10 @@ for (i in 1:nrow(mll_year_df)) {
     if (num_years >= 2) { # If the MLL exists in at least two years, assign "Asex"
       mll_year_df$Mll_persistence[i] <- "Asex"
     } else {
-      mll_year_df$Mll_persistence[i] <- "Sex"
+      mll_year_df$Mll_persistence[i] <- "Undetermined"
     }
   } else {
-    mll_year_df$Mll_persistence[i] <- "Sex"
+    mll_year_df$Mll_persistence[i] <- "Undetermined"
   }
 }
 
@@ -813,7 +817,7 @@ for (i in 1:nrow(mll_year_df)) {
   genotype_data$Mll_persistence[genotype_data$organised_MLL == mll_value] <- Mll_persistence_value
 }
 
-genotype_data[is.na(genotype_data$Mll_persistence), "Mll_persistence"] <- "Sex"
+genotype_data[is.na(genotype_data$Mll_persistence), "Mll_persistence"] <- "Undetermined"
 
 
 ```
@@ -865,7 +869,7 @@ GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   Temp_Sample <- popsub(final_GenInd, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 99, plot = F)[4] # Attention c'est assez long à tourner 
+  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] # Attention c'est assez long à tourner 
 }
 
 
@@ -927,7 +931,7 @@ print(contingency_table)
 
 # Rename the rows and columns of the contingency table
 rownames(contingency_table) <- c("Asex_cluster", "Sex_cluster")
-colnames(contingency_table) <- c("Asex_resampling", "Sex_resampling")
+colnames(contingency_table) <- c("Asex_resampling", "Undetermined_resampling")
 
 # Fisher's exact test
 fisher_test <- fisher.test(contingency_table)
@@ -1003,7 +1007,7 @@ GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   Temp_Sample <- popsub(final_GenInd, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 99, plot = F)[4] 
+  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] 
 }
 
 
@@ -1116,7 +1120,7 @@ GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   Temp_Sample <- popsub(data_GenInd_Asex_MLL, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 99, plot = F)[4]  
+  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4]  
 }
 
 
@@ -1260,7 +1264,7 @@ GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   Temp_Sample <- popsub(data_GenInd_Sex_MLL, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 99, plot = F)[4] 
+  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] 
 }
 
 
@@ -1318,12 +1322,14 @@ rm (Ar_per_loc, data_Fstat, data_Genclone_Asex, data_Genclone_Sex,
 
 
 
-##  Nighbour joining tree 
- 
-```{r}
-#Add the region to the genotype data
-genotype_data$Region <- general_data$Region[match(row.names(genotype_data), general_data$Isolate)]
 
+##  Nighbour joining tree 
+
+```{r}
+##  Neighbour-joining tree with 1000 bootstrap replicates
+
+# Add the region to the genotype data
+genotype_data$Region <- general_data$Region[match(row.names(genotype_data), general_data$Isolate)]
 
 # Convert to genind object
 final_GenInd <- df2genind(
@@ -1341,12 +1347,27 @@ final_GenInd <- df2genind(
   check.ploidy = getOption("adegenet.check.ploidy")
 )
 
+dir.create("data", showWarnings = FALSE)
+save(genotype_mlp, genotype_data, general_data, file = "data/my_data.RData")
 
-# Calculate distance matrix and build NJ tree
+#tree2 <- aboot(final_GenInd, distance = diss.dist, tree = "nj",
+#           missing = "asis", sample = 1000, quiet = TRUE, threads = 20)
 
-dist <- diss.dist(final_GenInd) # Calculate the distance matrix
-tree <- nj(dist) # Build the NJ tree
-tree2 <- aboot(final_GenInd, dist = diss.dist, tree = "upgma", missing = "asis", sample = 1000)
+tree2 <- readRDS("tree_nj_boot1000.rds")
+
+tree2$Nnode                                    # expect 2113
+sort(unique(as.numeric(tree2$node.label)))[1:15]   # should NOT be multiples of 20
+summary(as.numeric(tree2$node.label))
+
+
+
+# Bootstrap support in the format ggtree needs
+# Support in the format ggtree needs
+boot_df <- data.frame(node = (Ntip(tree2) + 1):(Ntip(tree2) + tree2$Nnode),
+                      bootstrap = as.numeric(tree2$node.label))
+boot_df$bootstrap[is.na(boot_df$bootstrap)] <- 0
+
+sum(boot_df$bootstrap >= 70)   # how many points will actually appear
 
 
 # Create group information based on 'Reproduction' column, Sex and Asex
@@ -1355,28 +1376,28 @@ groupInfo <- split(rownames(genotype_data), genotype_data$Reproduction)
 # Group the tree labels based on the group information
 tree <- groupOTU(tree2, groupInfo)
 npg_colors <- pal_npg("nrc", alpha = 0.9)(9)
-
 reproduction_colors <- c("Asex" = npg_colors[8], "Sex" = npg_colors[2])
 
 # Create circular plot
 options(ignore.negative.edge=TRUE)
-p <- ggtree(tree, aes(color = group), layout="circular") +
-  scale_color_manual(values = reproduction_colors) +  # Map custom colors to groups
-  labs(color = "Reproduction") +
+p <- ggtree(tree, aes(color = group), layout="circular") %<+% boot_df +
+  scale_color_manual(name = "Reproductive mode", values = reproduction_colors) +
+  ggnewscale::new_scale_color() +
+  geom_nodepoint(aes(subset = bootstrap >= 70, color = "\u2265 70%"), size = 1.2) +
+  scale_color_manual(name = "Bootstrap", values = c("\u2265 70%" = "black")) +
   theme(
-    panel.background = element_rect(fill='transparent'),
+    panel.background = element_rect(fill='transparent', color = NA),
     plot.background = element_rect(fill='transparent', color=NA),
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank(),
-    legend.background = element_rect(fill='transparent'),
-    legend.box.background = element_rect(fill='transparent'),
+    legend.background = element_rect(fill='transparent', color = NA),
+    legend.box.background = element_rect(fill='transparent', color = NA),
     legend.text = element_text(color = 'black', face = 'bold', size = 13),
     legend.title = element_text(color = 'black', face = 'bold', size = 15)
   )
 
 
 #p 
-
 # Create a dataframe for annotation
 dat1 <- data.frame(
   ID = rownames(genotype_data),
@@ -1391,7 +1412,6 @@ dat1_filtered <- dat1 %>% filter(MLL %in% c(1, 2, 3, 4, 5, 6,8,9))
 dat1_filtered$MLL <- as.factor(dat1_filtered$MLL)
 dat1_filtered$Year <- as.character(dat1_filtered$Year) 
 
-
 # Manually define the color mapping
 mll_color_mapping <- c(
   "1" = npg_colors[7],
@@ -1403,14 +1423,6 @@ mll_color_mapping <- c(
   "8" = npg_colors[3],  
   "9" = npg_colors[6]
 )
-
-
-# Convert MLL to factor
-dat1_filtered$MLL <- as.factor(dat1_filtered$MLL)
-
-# Add annotation dataset to the tree
-p1 <- p  %<+% dat1_filtered
-
 
 p2 <- p +
   geom_fruit(
@@ -1428,30 +1440,23 @@ p2 <- p +
     ),
     grid.params = list(color = "black", linetype = 5, size = 0.1, alpha = 0.7)  # Add grid lines
   ) +
-  scale_fill_manual(values = mll_color_mapping) +
-   # Customize the color gradient
+  scale_fill_manual(values = mll_color_mapping, drop = FALSE) +
   theme(
-    panel.background = element_rect(fill='transparent'), # transparent panel bg
+    panel.background = element_rect(fill='transparent', color = NA),
     plot.background = element_rect(fill='transparent', color=NA), # transparent plot bg
     panel.grid.major = element_blank(), 
     panel.grid.minor = element_blank(), 
-    legend.background = element_rect(fill='transparent'), 
-    legend.box.background = element_rect(fill='transparent'), 
+    legend.background = element_rect(fill='transparent', color = NA),
+    legend.box.background = element_rect(fill='transparent', color = NA),
     legend.text = element_text(color = 'black', face = 'bold', size = 13), 
-    legend.title = element_text(color = 'black', face = 'bold', size = 15) 
-
+    legend.title = element_text(color = 'black', face = 'bold', size = 15),
+    panel.border = element_blank()
   ) 
-
-# Modify legend titles
-p2 <- p2 + scale_fill_manual(values = mll_color_mapping, drop = FALSE)
 
 p2
 
-
-
 # Save the circular tree (Fig3a: branches only) and annotated tree (Fig3: with rings)
 ggsave("output/figures/Fig3_tree_nj_plot.png",  p2, width = 12, height = 9,  dpi = 600, bg = "white")
-
 ```
 
 
@@ -1513,42 +1518,97 @@ dev.off()
 
 
 ```{r , fig.width=10, fig.height=8}
-
 # Filter the data to include only the years 2009 and 2011
 pop_data <- genotype_data %>%
   filter(Year %in% c("2009","2011")) %>% 
   group_by(Pop, Long, Lat, Reproduction) %>%
   summarize(n = n(), .groups = "drop") %>%  
+  group_by(Pop) %>%
   mutate(percent = n / sum(n)) %>%
+  ungroup() %>%
   dplyr::select(Pop, Long, Lat, Reproduction, n, percent)
-
-
-#draw map representative the popular individual across France map within reproductive mode
 
 # Creates an xyz object for use with the function draw.pie
 xyz <- make.xyz(pop_data$Long, pop_data$Lat, pop_data$percent, pop_data$Reproduction)
 
+# Sample size per site, matched to the order that make.xyz produced
+n_by_site <- pop_data %>% group_by(Long, Lat) %>% summarize(N = sum(n), .groups = "drop")
+Nvec <- n_by_site$N[match(paste(round(xyz$x, 5), round(xyz$y, 5)),
+                          paste(round(n_by_site$Long, 5), round(n_by_site$Lat, 5)))]
+cat("sample size: min =", min(Nvec), " median =", median(Nvec), " max =", max(Nvec), "\n")
+
+# Pie radius: area proportional to sample size, so radius follows sqrt(N)
+R_max <- 0.45
+rad <- R_max * sqrt(Nvec / max(Nvec))
 
 # Create a named vector for profile colors
 profile_color_mapping <- c("Asex" = npg_colors[8], "Sex" = npg_colors[2])
 transparent_colors <- adjustcolor(profile_color_mapping, alpha.f = 0.7)
 
-
 # The plot of the pie chart above the map
-png(filename = "output/figures/Fig2_geographical_distribution_2009_2011.png", units="cm", width = 18, height = 15, res = 1200, bg = "white")
+svglite::svglite("output/figures/Fig2_geographical_distribution_2009_2011.svg",
+                 width = 18/2.54, height = 15/2.54, bg = "white", pointsize = 12)
 
 par(mai = c(0, 0, 0, 0), bty = "n")
-basemap(xlim = c(-4.3, 9.1), ylim = c(41, 51), bg = "white", axes=FALSE)
+basemap(xlim = c(-4.3, 9.1), ylim = c(41, 51), bg = "white", axes = FALSE)
 map("france", fill = FALSE, col = "black", add = TRUE)
+final_map <- draw.pie(xyz$x, xyz$y, xyz$z, radius = rad, col = transparent_colors,
+                      border = "grey30", lwd = 0.3)
 
-final_map <- draw.pie(xyz$x, xyz$y, xyz$z, radius = 0.3, col = transparent_colors) 
-legend(-5, 45, legend = c("Asex", "Sex"), fill = transparent_colors, bty = "n", cex = 1, ncol = 1, text.col = "black")
+# Reproductive mode legend, top left over the English Channel
+legend(-6.1, 50.95, title = "Reproductive mode",
+       legend = c("Asexual", "Sexual"), fill = transparent_colors,
+       border = "grey30", bty = "n", cex = 1, ncol = 1,
+       title.adj = 0, text.col = "black")
+
+# Sample size legend, one block per circle so each one can be moved on its own
+# Radii of the reference circles, same formula as the pies
+r10 <- R_max * sqrt(10 / max(Nvec))
+r30 <- R_max * sqrt(30 / max(Nvec))
+r60 <- R_max * sqrt(60 / max(Nvec))
+
+# Equal gap between the circle EDGES, not between their centres
+gap <- 0.25          # gap size in degrees, change this to spread them out
+y10 <- 46.00         # centre of the top circle, move the whole stack from here
+y30 <- y10 - r10 - gap - r30
+y60 <- y30 - r30 - gap - r60
+
+# Sample size legend, one block per circle so each one can be moved on its own
+text(-6.10, y10 + r10 + 0.55, "Sample size (n)", adj = c(0, 0.5), cex = 1, font = 1)
+
+draw.pie(-5.60, y10, matrix(1), radius = r10,
+         col = "grey88", border = "grey30", lwd = 0.3)
+text(-4.95, y10, "10", adj = c(0, 0.5), cex = 1)
+
+draw.pie(-5.60, y30, matrix(1), radius = r30,
+         col = "grey88", border = "grey30", lwd = 0.3)
+text(-4.95, y30, "30", adj = c(0, 0.5), cex = 1)
+
+draw.pie(-5.60, y60, matrix(1), radius = r60,
+         col = "grey88", border = "grey30", lwd = 0.3)
+text(-4.95, y60, "60", adj = c(0, 0.5), cex = 1)
 
 
-dev.off() 
+# Scale bar and north arrow, sizes are in inches so they never change with the extent
+prettymapr::addscalebar(plotepsg = 4326, pos = "bottomright", style = "bar",
+                        widthhint = 0.25, htin = 0.08, label.cex = 0.9,
+                        padin = c(0.15, 0.15))
 
+prettymapr::addnortharrow(pos = "topright", scale = 0.5, padin = c(0.20, 0.20))
 
+# Europe inset with France in red, drawn last because par(fig) switches the coordinates
+rect(-5.90, 41.05, -2.50, 43.30, col = "white", border = "black", lwd = 0.7)
+fx <- grconvertX(c(-5.90, -2.50), from = "user", to = "ndc")
+fy <- grconvertY(c(41.05, 43.30), from = "user", to = "ndc")
+par(fig = c(fx, fy))
+par(mai = c(0.02, 0.02, 0.02, 0.02))
+par(new = TRUE)   # new = TRUE must be the last par call, mai and fig reset it and the page gets wiped
+plot.new()
+plot.window(xlim = c(-12, 32), ylim = c(34, 62), asp = 1/cos(48*pi/180))
+map("world", fill = TRUE, col = "grey88", border = "grey55", lwd = 0.2, add = TRUE)
+map("world", regions = "France", fill = TRUE, col = "red", border = "red", lwd = 0.3, add = TRUE)
 
+dev.off()
 ```
 
 
@@ -1607,6 +1667,9 @@ glmm_model <- glmer(
 # Display the summary of the GLMM
 summary(glmm_model)
 
+tab3 <- as.data.frame(coef(summary(glmm_model)))
+tab3 <- cbind(Predictor = rownames(tab3), tab3)
+write.csv(tab3, "output/tables/Table3_GLMM_binomial_regression.csv", row.names = FALSE)
 
 ```
 
@@ -1665,7 +1728,7 @@ p_lat_filtered <- ggplot(final_table_filtered, aes(x = Lat, y = nbsex / (nbsex +
 #p_lat_filtered
 
 # Save the plot
-#ggsave("output/figures/FigS4_effect_of_latitude.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 600, bg = "white")
+#ggsave("output/figures/FigS4_effect_of_latitude.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 1200, bg = "white")
 
 
 
@@ -1740,7 +1803,7 @@ p_lat_filtered <- ggplot(final_table_filtered, aes(x = Lat, y = nbsex / (nbsex +
 p_lat_filtered
 
 # Save GLMM regression plot
-ggsave("output/figures/FigS4_effect_of_latitude_glmm.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 600, bg = "white")
+ggsave("output/figures/FigS4_effect_of_latitude_glmm.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 1200, bg = "white")
 
 ```
 
@@ -1893,7 +1956,7 @@ mll_years <- ggplot(asexual_lineages_years, aes(x = Year, y = n, fill = as.facto
 
 mll_years
 
-ggsave("output/figures/Fig4B_asex_mll_Year.png", mll_years, width = 17, height = 8, dpi = 600, bg = "white")
+ggsave("output/figures/Fig4B_asex_mll_Year.png", mll_years, width = 17, height = 8, dpi = 1200, bg = "white")
   
 
 
@@ -1937,7 +2000,7 @@ mll_locations <- ggplot(asexual_lineages_locations, aes(x = n, y = Location, fil
 
 mll_locations
 
-ggsave("output/figures/Fig4A_asex_mll_Locations.png", mll_locations, width = 17, height = 8, dpi = 600, bg = "white")
+ggsave("output/figures/Fig4A_asex_mll_Locations.png", mll_locations, width = 17, height = 8, dpi = 1200, bg = "white")
   
 
 
@@ -1954,7 +2017,7 @@ combined_plot <- plot_grid(
 
 combined_plot
 
-ggsave("output/figures/Fig4_asex_mll_Year_Locations.png", combined_plot, width = 10, height = 8, dpi = 600, bg = "white")
+ggsave("output/figures/Fig4_asex_mll_Year_Locations.png", combined_plot, width = 10, height = 8, dpi = 1200, bg = "white")
 
 
 ```
@@ -2010,4 +2073,88 @@ fisher_result_locations_mll <- fisher.test(fisher_matrix_locations_mll, simulate
 
 ```
 
+## This summarizes per_variant to understand better the diveristy come from the mutation or recombination
+```{r}
+# Is within-lineage diversity generated by mutation or by recombination?
+# For each asexual lineage (MLL), we compare every distinct genotype to the
+# lineage's most common ("central") genotype and count how many loci differ:
+#   1 differing locus  -> single mutational step (mutation)
+#   >=3 differing loci -> multilocus reshuffling (recombination-like)
+
+library(adegenet); library(poppr); library(dplyr)
+
+asexual_genind <- data_GenInd_Asex_MLL          # asexual isolates; pop() == organised_MLL
+genotype_table <- genind2df(asexual_genind, sep = "/")
+lineage_id     <- genotype_table$pop
+genotype_table$pop <- NULL
+locus_names    <- colnames(genotype_table)
+
+# Make allele order irrelevant so 100/102 == 102/100
+sort_alleles <- function(locus_column) {
+  vapply(strsplit(locus_column, "/"),
+         function(alleles) paste(sort(alleles), collapse = "/"),
+         character(1))
+}
+genotype_sorted <- as.data.frame(lapply(genotype_table, sort_alleles),
+                                 stringsAsFactors = FALSE)
+colnames(genotype_sorted) <- locus_names
+
+# For each lineage: compare every distinct genotype to the central (most common) one
+variant_differences <- do.call(rbind, lapply(unique(lineage_id), function(this_lineage) {
+  lineage_genotypes <- genotype_sorted[lineage_id == this_lineage, , drop = FALSE]
+  if (nrow(lineage_genotypes) < 2) return(NULL)
+
+  genotype_string   <- apply(lineage_genotypes, 1, paste, collapse = "|")
+  genotype_counts   <- sort(table(genotype_string), decreasing = TRUE)
+  if (length(genotype_counts) < 2) return(NULL)          # single genotype: no diversity
+
+  central_alleles   <- strsplit(names(genotype_counts)[1], "\\|")[[1]]
+  variant_genotypes <- names(genotype_counts)[-1]
+
+  do.call(rbind, lapply(variant_genotypes, function(variant) {
+    variant_alleles <- strsplit(variant, "\\|")[[1]]
+    comparable      <- !(is.na(central_alleles) | is.na(variant_alleles) |
+                         central_alleles == "NA" | variant_alleles == "NA")
+    data.frame(lineage           = this_lineage,
+               n_isolates_variant = as.integer(genotype_counts[variant]),
+               loci_differing     = sum(central_alleles[comparable] != variant_alleles[comparable]))
+  }))
+}))
+
+# Overall breakdown (these are the numbers quoted in the Discussion)
+cat(sprintf("1 locus: %.1f%%   2 loci: %.1f%%   >=3 loci: %.1f%%   (n = %d variants)\n",
+    100 * mean(variant_differences$loci_differing == 1,  na.rm = TRUE),
+    100 * mean(variant_differences$loci_differing == 2,  na.rm = TRUE),
+    100 * mean(variant_differences$loci_differing >= 3,  na.rm = TRUE),
+    sum(!is.na(variant_differences$loci_differing))))
+
+# Table S2: one row per asexual lineage
+within_lineage_summary <- variant_differences %>%
+  group_by(lineage) %>%
+  summarise(
+    n_variant_genotypes = n(),
+    variants_1_locus    = sum(loci_differing == 1,  na.rm = TRUE),
+    variants_2_loci     = sum(loci_differing == 2,  na.rm = TRUE),
+    variants_3plus_loci = sum(loci_differing >= 3,  na.rm = TRUE),
+    max_loci_differing  = ifelse(all(is.na(loci_differing)), 0L,
+                                 max(loci_differing, na.rm = TRUE)),
+    .groups = "drop"
+  )
+
+# Add total isolates per lineage, keep the real MLL (organised_MLL) labels
+isolates_per_lineage <- as.data.frame(table(pop(asexual_genind)))
+colnames(isolates_per_lineage) <- c("lineage", "n_isolates_total")
+isolates_per_lineage$lineage <- as.integer(as.character(isolates_per_lineage$lineage))
+
+tableS2 <- merge(isolates_per_lineage, within_lineage_summary, by = "lineage", all.x = TRUE)
+tableS2[is.na(tableS2)] <- 0                              # lineages with no internal variants
+tableS2$Lineage <- paste0("MLL", tableS2$lineage)        # real labels, not renumbered
+tableS2 <- tableS2[order(-tableS2$n_isolates_total), ]
+tableS2 <- tableS2[, c("Lineage", "n_isolates_total", "n_variant_genotypes",
+                       "variants_1_locus", "variants_2_loci",
+                       "variants_3plus_loci", "max_loci_differing")]
+
+print(tableS2)
+write.csv(tableS2, "output/tables/Table_S2_within_lineage_variation_asexual.csv", row.names = FALSE)
+```
 

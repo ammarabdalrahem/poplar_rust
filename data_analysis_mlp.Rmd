@@ -1434,8 +1434,17 @@ final_GenInd <- df2genind(
   check.ploidy = getOption("adegenet.check.ploidy")
 )
 
+<<<<<<< HEAD
 dir.create("data", showWarnings = FALSE)
 save(genotype_mlp, genotype_data, general_data, file = "data/my_data.RData")
+=======
+# Snapshot of the working objects, so the slow first half of the script does
+# not have to be re-run when returning to the analysis: load("output/my_data.RData")
+# It is written under output/ like every other product of the run, so it lands
+# in the same place whether the script runs in RStudio, in a terminal, or in
+# the Docker container (where only /project/output is mounted).
+save(genotype_mlp, genotype_data, general_data, file = "output/my_data.RData")
+>>>>>>> f0f15b2 (Ship precomputed NJ tree in the image; write snapshot to output/)
 
 #tree2 <- aboot(final_GenInd, distance = diss.dist, tree = "nj",
 #           missing = "asis", sample = 1000, quiet = TRUE, threads = 20)

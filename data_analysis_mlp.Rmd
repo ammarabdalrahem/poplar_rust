@@ -1,18 +1,31 @@
 ---
-title: "Population genetics analysis of_Melampsora larici-populina_ based on microsatellite markers"
-output: 
-  html_document:
-    theme: cerulean
-    toc: true
-    toc_float: true
+title: "Population genetics of *Melampsora larici-populina* based on microsatellite markers"
+subtitle: "Analysis workflow for *Long-lasting coexistence of multiple asexual lineages alongside their sexual counterparts in a fungal plant pathogen*"
 author: "Ammar Abdalrahem"
 date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: cerulean
+    highlight: tango
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    toc_depth: 3
+    number_sections: true
+    code_folding: show
 ---
 
+Section numbers and the table of contents are generated automatically from the
+headings below, so they stay correct when sections are added or moved. Headings
+name the figure or table of the manuscript that the section produces.
 
 
 
-## Installation of required packages
+
+# Setup and data
+
+## Install and load required packages
 
 ```{r, include=FALSE}
 # Install (if necessary) and load required packages.
@@ -84,11 +97,17 @@ invisible(lapply(all_pkgs, function(p) {
   }
 }))
 
+# 8. Shared colour palette
+# The NPG (Nature Publishing Group) palette is used by Figure 2, Figure 3,
+# Figure 4 and Figure S4. It is defined once here, with the packages, so that
+# no figure chunk depends on another figure chunk having been run first.
+npg_colors <- pal_npg("nrc", alpha = 0.9)(9)
+
 ```
 
 
 
-### Data retrieval
+## Data retrieval
 
 ```{r, include=FALSE}
 # Set working directory to the Rmd's own directory.
@@ -140,7 +159,7 @@ general_data$Dept[fix_mask] <- dept_canonical[general_data[["Dept #"]][fix_mask]
 head(general_data)
 ```
 
-## Figure shows the sample collections sites and stratigies
+## Figure S1 - sampling sites and sampling strategy
 
 ```{r}
 
@@ -259,7 +278,9 @@ ggsave("output/figures/FigS1_geographic_distribution.svg", p, device = svglite::
 
 ```
 
-## The definition of MLLs
+# Delineation of multilocus lineages (manuscript Results 3.1)
+
+## From multilocus genotypes (MLG) to multilocus lineages (MLL)
 
 ```{r}
 # Create table of genotype data by select columns with "Mlp" in the name and the first column as isolate id
@@ -328,10 +349,24 @@ mll_assignments<- mlg.filter(data_Genclone, threshold = average_thresh , algorit
 
 genotype_data$MLL <- mll_assignments
 
+# EXPORT: numbers quoted in Results 3.1 (number of MLGs, number of MLLs and the
+# genetic distance threshold used for MLL delineation) had no output file.
+mll_delineation <- data.frame(
+  N_individuals      = nrow(genotype_data),
+  N_MLG              = length(unique(genotype_data$MLG)),
+  N_MLL              = length(unique(genotype_data$MLL)),
+  threshold_UPGMA    = average_thresh,
+  threshold_farthest = farthest_thresh,
+  threshold_nearest  = nearest_thresh
+)
+kable(mll_delineation, digits = 3)
+write.csv(mll_delineation,
+          file = "output/tables/Table_MLL_delineation_summary.csv",
+          row.names = FALSE)
 
 ```
 
-### Ascending order for fixation of MLL
+## Ordering multilocus lineages by abundance
 
 
 ```{r}
@@ -376,9 +411,11 @@ genotype_data <- genotype_data[order(genotype_data$organised_MLL),]
 ```
 
 
-## Clustering approch
+# Reproductive mode assessment (manuscript Results 3.2)
 
-### Assignment of isolates to clusters based on genetic data 
+## Clustering approach
+
+### Assignment of isolates to clusters - Figures S2 and S3
 
 ```{r}
 # Create a table of genotypes for allele data only
@@ -423,12 +460,17 @@ my_kmeans <- function(x, k) {
   kmeans(x, k, iter.max = 100, nstart = 25)
 }
 
-fviz_nbclust(scores, my_kmeans, method = "silhouette", k.max = 20)
+# Figure S2 - silhouette score for k = 1..20.
+# The plot is computed once and stored. The previous version called
+# fviz_nbclust twice (once on screen, once inside the png device), which ran
+# the same slow k-means twice, and a ggplot object is not auto-printed inside
+# a device, so the saved png could come out empty. print() fixes that.
+sil_plot <- fviz_nbclust(scores, my_kmeans, method = "silhouette", k.max = 20)
+sil_plot
 
 # save the plot
 png("output/figures/FigS2_Silhouette_kmeans.png", width = 1200, height = 800, res = 150)
-# Plot silhouette results
-fviz_nbclust(scores, my_kmeans, method = "silhouette", k.max = 20)
+print(sil_plot)
 dev.off()
 
 # 4) find.clusters()
@@ -449,7 +491,7 @@ mean_success  <- as.numeric(xval$`Mean Successful Assignment by Number of PCs of
 opt_pcs       <- as.numeric(xval$`Number of PCs Achieving Highest Mean Success`)
 
 # Save plot of mean successful assignment vs number of PCs
-png("output/figures/Dapc_xval.png", width = 1200, height = 800, res = 150)
+
 plot(n_pcs_tested, mean_success,
      type = "b", pch = 19, col = "blue",
      xlab = "Number of PCs",
@@ -458,7 +500,6 @@ abline(v = opt_pcs, col = "red", lty = 2)
 legend("bottomright",
        legend = paste("Optimal PCs =", opt_pcs),
        col = "red", lty = 2, bty = "n")
-dev.off()
 
 
 
@@ -469,12 +510,11 @@ opt_pcs <- as.numeric(xval$`Number of PCs Achieving Highest Mean Success`)
 
 
 # 6) DAPC using validated opt_pcs
-pca1 <- dudi.pca(X,scannf=FALSE,scale=FALSE) # PCA with ade4
+# >>> on 2,122 individuals x 21 loci is one of the slowest lines in the file.
 dapc1 <- dapc(data_GenInd, grp$grp, n.pca = opt_pcs, n.clust = 2, n.da = 1)
-scatter(dapc1) # scatter plot of DAPC results
 
+# >>> carries the same information as Fig. S3.
 # save DAPC scatter plot
-png("output/figures/DAPC_scatter.png", width = 1200, height = 1000, res = 150)
 
 # Plot scatter
 scatter(dapc1,
@@ -483,11 +523,9 @@ scatter(dapc1,
         scree.da = FALSE,
         bg = "white")
 
-# Close file
-dev.off()
 
 
-png("output/figures/DAPC_compoplot.png", width = 1200, height = 800, res = 150)
+# >>> listed in README.md. Membership probabilities are already shown in Fig. S3.
 
 # Plot compoplot
 compoplot(dapc1,
@@ -498,8 +536,6 @@ compoplot(dapc1,
           col = alpha(c("red","blue"), 0.8),
           border = NA)
 
-# Close file
-dev.off()
 
 
 
@@ -510,6 +546,19 @@ table(grp$grp, dapc1$assign)
 # Variance explained by retained PCs
 pca_var <- dapc1$pca.eig # extract the PCA eigenvalues
 sum(pca_var[1:10]) / sum(pca_var) * 100 # calculate the percentage of variance explained by the first 10 PCs
+
+# EXPORT: the three values quoted in Methods 2.3 (10 PCs retained, 99% mean
+# correct reassignment, 46% of the genetic variance) were printed only.
+dapc_summary <- data.frame(
+  optimal_n_pca           = opt_pcs,
+  mean_correct_assignment = max(mean_success),
+  variance_explained_pct  = sum(pca_var[1:opt_pcs]) / sum(pca_var) * 100,
+  n_clusters              = 2
+)
+kable(dapc_summary, digits = 3)
+write.csv(dapc_summary,
+          file = "output/tables/Table_DAPC_crossvalidation_summary.csv",
+          row.names = FALSE)
 
 # Convert the posterior probabilities to a data frame
 posterior_data <- as.data.frame(dapc1$posterior)
@@ -534,7 +583,14 @@ cluster_assignments <- ggplot(melted_data, aes(x = Cluster, y = Probability, col
     legend.background = element_rect(fill = "transparent"),             
     legend.key = element_rect(fill = "transparent")                     
   ) +
-geom_text_repel() # to avoid overlapping labels
+# The Fig. S3 caption says "with the names of individuals of lower probability",
+# but this labelled all 2,122 individuals, which is the overlap the PCI data
+# editor reported as unreadable. Only individuals that fall below the 0.8
+# membership threshold in both clusters are labelled now.
+geom_text_repel(
+  data = subset(melted_data, Probability > 0.2 & Probability < 0.8),
+  max.overlaps = Inf, size = 3, min.segment.length = 0,
+  box.padding = 0.6, seed = 123) # to avoid overlapping labels
   
 
 cluster_assignments
@@ -565,7 +621,7 @@ genotype_data <- subset(genotype_data, Cluster %in% c("Cluster 1", "Cluster 2"))
 
 
 
-### Calculation of population genetic indices for each cluster 
+### Population genetic indices per cluster - Table 1a
 
 
 ```{r}
@@ -657,7 +713,11 @@ MLL <- sapply(Pop, function(p) {
   length(unique(genotype_data$organised_MLL[genotype_data$Cluster == p]))
 })
 
-Tab_Indices_per_pop <- rbind(N, MLG, MLL, GsurN, Ar, Ho, Hs, Fis, Fis_var, rbarD)
+# EXPORT: ProbaLD (computed above with ia(..., sample = 999)) is the permutation
+# p-value of rd. It is the evidence behind "high linkage disequilibrium" in
+# Results 3.2, it costs 999 permutations per cluster to compute, and it was
+# being thrown away. It is added to Table 1 here.
+Tab_Indices_per_pop <- rbind(N, MLG, MLL, GsurN, Ar, Ho, Hs, Fis, Fis_var, rbarD, ProbaLD)
 colnames(Tab_Indices_per_pop) <- Pop
 Tab_Indices_per_pop <- t(Tab_Indices_per_pop)
 
@@ -665,7 +725,7 @@ Tab_Indices_per_pop <- t(Tab_Indices_per_pop)
 # Pareto beta is not computed by this script; add it from the manuscript
 # methods if an exact match to the published Table 1 is required.
 colnames(Tab_Indices_per_pop) <- c("N", "MLG", "MLL", "R", "Ar",
-                                   "Ho", "He", "Fis", "Var (FIS)", "rd")
+                                   "Ho", "He", "Fis", "Var (FIS)", "rd", "p (rd)")
 kable(Tab_Indices_per_pop, digits = 3)
 
 # Export Table 1 as CSV
@@ -679,7 +739,7 @@ write.csv(
 ```
 
 
-### Define the reproduction mode
+### Assigning the reproductive mode from FIS
 
 
 ```{r}
@@ -701,11 +761,11 @@ for (i in 1:nrow(Tab_Indices_per_pop)) {
 
 ```
 
-## Define the reproduction mode by resampling approach
+## Resampling approach
 
 Depending on the MLL persistence, we can assign the reproduction mode to each lineage. If the same lineage exist at least two different years (to avoide clone mate) is asex, otherwise is sex.
 
-### Create table of repeated Mll diffrent years
+### Multilocus lineages resampled across years
 ```{r}
 # Add the Year column to the genotype_data table
 genotype_data$Year <- general_data$Year[match(row.names(genotype_data), general_data$Isolate)]
@@ -787,7 +847,7 @@ write.csv(mll_year_df, file = "output/tables/filtered_mll_years.csv", row.names 
 ```
 
 
-### Assign the reproduction mode based on the MLL persistence (resampling approach)
+### Assigning the reproductive mode from lineage persistence
 
 ```{r}
 for (i in 1:nrow(mll_year_df)) {
@@ -823,7 +883,7 @@ genotype_data[is.na(genotype_data$Mll_persistence), "Mll_persistence"] <- "Undet
 ```
 
 
-## Population genetic indices for each reproduction mode (resampling approach)
+### Population genetic indices per reproductive mode - Table 1b
 
 
 ```{r}
@@ -902,11 +962,12 @@ MLG <- Table_PPR$MLG[1:Nb_Pop]
 MLL <- sapply(Pop, function(p) {
   length(unique(genotype_data$organised_MLL[genotype_data$Mll_persistence == p]))
 })
-Tab_Indices_per_pop <- rbind(N, MLG, MLL, GsurN, Ar, Ho, Hs, Fis, Fis_var, rbarD)
+# EXPORT: same as Table 1a - the LD permutation p-value (ProbaLD) is kept.
+Tab_Indices_per_pop <- rbind(N, MLG, MLL, GsurN, Ar, Ho, Hs, Fis, Fis_var, rbarD, ProbaLD)
 colnames(Tab_Indices_per_pop) <- Pop
 Tab_Indices_per_pop <- t(Tab_Indices_per_pop)
 colnames(Tab_Indices_per_pop) <- c("N", "MLG", "MLL", "R", "Ar",
-                                   "Ho", "He", "Fis", "Var (FIS)", "rd")
+                                   "Ho", "He", "Fis", "Var (FIS)", "rd", "p (rd)")
 kable(Tab_Indices_per_pop, digits = 3)
 write.csv(
   data.frame(Reproduction = rownames(Tab_Indices_per_pop), Tab_Indices_per_pop,
@@ -920,7 +981,7 @@ write.csv(
 
 
 
-### Fisher's exact test for the Clustering and resampling approches
+## Agreement between the two approaches - Table 2
 
 ```{r, echo=FALSE}
 # Create the contingency table
@@ -929,13 +990,30 @@ contingency_table <- table(genotype_data$assignment, genotype_data$Mll_persisten
 # Print the contingency table
 print(contingency_table)
 
-# Rename the rows and columns of the contingency table
+# Rename the rows and columns of the contingency table.
+# NOTE: these labels are positional. table() orders levels alphabetically, so
+# this is correct only while the levels are ("Asex","Sex") and
+# ("Asex","Undetermined"). If a third level ever appears the labels silently go
+# wrong, so check print(contingency_table) above before trusting Table 2.
 rownames(contingency_table) <- c("Asex_cluster", "Sex_cluster")
 colnames(contingency_table) <- c("Asex_resampling", "Undetermined_resampling")
 
 # Fisher's exact test
 fisher_test <- fisher.test(contingency_table)
 print(fisher_test)
+
+# EXPORT: the p-value, odds ratio and confidence interval quoted in Results 3.2
+# were printed to the console only.
+fisher_clust_resamp <- data.frame(
+  Test       = "Clustering vs resampling assignment",
+  p_value    = fisher_test$p.value,
+  odds_ratio = unname(fisher_test$estimate),
+  CI_low     = fisher_test$conf.int[1],
+  CI_high    = fisher_test$conf.int[2]
+)
+write.csv(fisher_clust_resamp,
+          file = "output/tables/Table2_b_fisher_test_clustering_vs_resampling.csv",
+          row.names = FALSE)
 
 # Save Table 2: contingency table (clustering vs resampling approach)
 write.csv(
@@ -946,7 +1024,7 @@ write.csv(
 ```
 
 
-## Define reproduction mode based on combination of both approches
+## Combined definition of the reproductive mode
 
 
 ```{r}
@@ -960,7 +1038,7 @@ genotype_data$Reproduction <- ifelse(genotype_data$assignment == "Asex" | genoty
 
 
 
-## Population genetic indices for each reproduction mode (both approches)
+### Population genetic indices per reproductive mode - Table 1c
 
 
 
@@ -1040,11 +1118,12 @@ MLG <- Table_PPR$MLG[1:Nb_Pop]
 MLL <- sapply(Pop, function(p) {
   length(unique(genotype_data$organised_MLL[genotype_data$Reproduction == p]))
 })
-Tab_Indices_per_pop <- rbind(N, MLG, MLL, GsurN, Ar, Ho, Hs, Fis, Fis_var, rbarD)
+# EXPORT: same as Table 1a - the LD permutation p-value (ProbaLD) is kept.
+Tab_Indices_per_pop <- rbind(N, MLG, MLL, GsurN, Ar, Ho, Hs, Fis, Fis_var, rbarD, ProbaLD)
 colnames(Tab_Indices_per_pop) <- Pop
 Tab_Indices_per_pop <- t(Tab_Indices_per_pop)
 colnames(Tab_Indices_per_pop) <- c("N", "MLG", "MLL", "R", "Ar",
-                                   "Ho", "He", "Fis", "Var (FIS)", "rd")
+                                   "Ho", "He", "Fis", "Var (FIS)", "rd", "p (rd)")
 kable(Tab_Indices_per_pop, digits = 3)
 write.csv(
   data.frame(Reproduction = rownames(Tab_Indices_per_pop), Tab_Indices_per_pop,
@@ -1063,7 +1142,9 @@ write.csv(genotype_data, file = "output/tables/new_genotype_data.csv")
 ```
 
 
-## Population genetic indices for asex group only 
+# Genetic indices within reproductive groups
+
+## Asexual group, lineage by lineage - Table 4
 
 ```{r, echo=FALSE}
 
@@ -1094,7 +1175,9 @@ data_GenInd_Asex_MLL <- df2genind(
 )
 data_Genclone_Asex <- as.genclone(data_GenInd_Asex_MLL)
 
-data_Asex_filtered <-filter_stats(data_Genclone_Asex, distance = diss.dist, plot = TRUE, missing = "asis")
+# >>> the asexual set computes a full pairwise distance matrix and draws a plot
+# >>> that appears in no figure. The MLL threshold was already fixed above.
+#data_Asex_filtered <-filter_stats(data_Genclone_Asex, distance = diss.dist, plot = TRUE, missing = "asis")
 
 Nb_Pop = length(levels(data_GenInd_Asex_MLL@pop))
 
@@ -1107,6 +1190,9 @@ Hs <- vector(mode ="numeric", length = Nb_Pop)
 Fis <- vector(mode ="numeric", length = Nb_Pop)
 rbarD<- vector(mode ="numeric", length = Nb_Pop)
 Fis_sd <- vector(mode ="numeric", length = Nb_Pop)
+# Fis_var was assigned in the loop below without being declared here, so it kept
+# the length of the previous chunk's vector. Declared now.
+Fis_var <- vector(mode ="numeric", length = Nb_Pop)
 
 Pop <- levels(data_GenInd_Asex_MLL$pop)
 
@@ -1115,13 +1201,6 @@ Table_PPR <- poppr(data_GenInd_Asex_MLL)
 rbarD <- Table_PPR$rbarD[1:Nb_Pop]
 N <- Table_PPR$N[1:Nb_Pop]
 GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
-
-# LD
-ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
-for (i in 1:Nb_Pop) {
-  Temp_Sample <- popsub(data_GenInd_Asex_MLL, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4]  
-}
 
 
 # Ho, He, Fis et Ar
@@ -1194,20 +1273,11 @@ write.csv(asex_mll_tab,
           row.names = FALSE)
 
 
-
-# Assuming 'Asex_data' is your data frame containing MLG and MLL information
-#mlg_counts <- aggregate(MLG ~ organised_MLL, data = Asex_data, FUN = function(x) length(unique(x)))
-#rownames(mlg_counts) <- mlg_counts[,1]
-
-#Asexual_lineages <- merge(mlg_counts,Tab_Indices_per_mll,by="row.names",all.x=TRUE)
-
-
-
 ```
 
 
 
-## Population genetic indices for sex group only 
+## Sexual group, lineage by lineage
 
 ```{r, echo=FALSE}
 
@@ -1237,7 +1307,8 @@ data_GenInd_Sex_MLL <- df2genind(
 )
 data_Genclone_Sex<- as.genclone(data_GenInd_Sex_MLL)
 
-data_Sex_filtered <-filter_stats(data_Genclone_Sex, distance = diss.dist, plot = TRUE, missing = "asis")
+
+#data_Sex_filtered <-filter_stats(data_Genclone_Sex, distance = diss.dist, plot = TRUE, missing = "asis")
 
 Nb_Pop = length(levels(data_GenInd_Sex_MLL@pop))
 
@@ -1249,6 +1320,8 @@ Hs <- vector(mode ="numeric", length = Nb_Pop)
 Fis <- vector(mode ="numeric", length = Nb_Pop)
 rbarD<- vector(mode ="numeric", length = Nb_Pop)
 Fis_sd <- vector(mode ="numeric", length = Nb_Pop)
+# Same as in the asexual block: Fis_var is used below but was never declared.
+Fis_var <- vector(mode ="numeric", length = Nb_Pop)
 
 
 Pop <- levels(data_GenInd_Sex_MLL$pop)
@@ -1259,13 +1332,6 @@ Table_PPR <- poppr(data_GenInd_Sex_MLL)
 rbarD <- Table_PPR$rbarD[1:Nb_Pop]
 N <- Table_PPR$N[1:Nb_Pop]
 GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
-
-# LD
-ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
-for (i in 1:Nb_Pop) {
-  Temp_Sample <- popsub(data_GenInd_Sex_MLL, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] 
-}
 
 
 # Ho, He, Fis et Ar
@@ -1310,7 +1376,7 @@ write.csv(
 mlg_counts <- aggregate(MLG ~ organised_MLL, data = Sex_data, FUN = function(x) length(unique(x)))
 rownames(mlg_counts) <- mlg_counts[,1]
 
-Sexual_lineages <- merge(mlg_counts,Tab_Indices_per_mll,by="row.names",all.x=TRUE)
+#Sexual_lineages <- merge(mlg_counts,Tab_Indices_per_mll,by="row.names",all.x=TRUE)
 
 
 
@@ -1323,13 +1389,34 @@ rm (Ar_per_loc, data_Fstat, data_Genclone_Asex, data_Genclone_Sex,
 
 
 
-##  Nighbour joining tree 
+# Genetic relationships among lineages (manuscript Results 3.4)
+
+## Shared annotation table for Figures 3 and 4
+
+Both figures describe the same individuals: Figure 3 uses them for the rings
+around the tree, Figure 4 for the abundance bars. The table is therefore built
+once here, before either figure, so the two chunks are independent of each
+other.
+
+```{r}
+# Add the region to the genotype data
+genotype_data$Region <- general_data$Region[match(row.names(genotype_data), general_data$Isolate)]
+
+# One row per individual: lineage, reproductive mode, year and region.
+dat1 <- data.frame(
+  ID       = rownames(genotype_data),
+  MLL      = genotype_data$organised_MLL,
+  Group    = genotype_data$Reproduction,
+  Year     = as.factor(genotype_data$Year),
+  Location = genotype_data$Region
+)
+```
+
+
+## Figure 3 - neighbour-joining tree
 
 ```{r}
 ##  Neighbour-joining tree with 1000 bootstrap replicates
-
-# Add the region to the genotype data
-genotype_data$Region <- general_data$Region[match(row.names(genotype_data), general_data$Isolate)]
 
 # Convert to genind object
 final_GenInd <- df2genind(
@@ -1375,7 +1462,7 @@ groupInfo <- split(rownames(genotype_data), genotype_data$Reproduction)
 
 # Group the tree labels based on the group information
 tree <- groupOTU(tree2, groupInfo)
-npg_colors <- pal_npg("nrc", alpha = 0.9)(9)
+# npg_colors is defined once in the package-loading chunk at the top.
 reproduction_colors <- c("Asex" = npg_colors[8], "Sex" = npg_colors[2])
 
 # Create circular plot
@@ -1398,15 +1485,7 @@ p <- ggtree(tree, aes(color = group), layout="circular") %<+% boot_df +
 
 
 #p 
-# Create a dataframe for annotation
-dat1 <- data.frame(
-  ID = rownames(genotype_data),
-  MLL = genotype_data$organised_MLL,
-  Group = genotype_data$Reproduction,
-  Year = as.factor(genotype_data$Year),
-  Location = genotype_data$Region
-)
-
+# dat1 is built in the "Shared annotation table" chunk above.
 # Filter dat1 to include MLLs
 dat1_filtered <- dat1 %>% filter(MLL %in% c(1, 2, 3, 4, 5, 6,8,9))
 dat1_filtered$MLL <- as.factor(dat1_filtered$MLL)
@@ -1455,16 +1534,18 @@ p2 <- p +
 
 p2
 
-# Save the circular tree (Fig3a: branches only) and annotated tree (Fig3: with rings)
+# README.md lists Fig3a_tree_plot1.png but nothing ever wrote it - this is the
 ggsave("output/figures/Fig3_tree_nj_plot.png",  p2, width = 12, height = 9,  dpi = 600, bg = "white")
 ```
 
 
 
-## Spatial analysis 
+# Spatial distribution of reproductive modes (manuscript Results 3.3)
+
+## Figure 2 - geographical distribution of reproductive modes, 2009 and 2011
 
 
-```{r, echo=FALSE}
+```{r , fig.width=10, fig.height=8}
 
 # summarize data by population and location
 genotype_data$Pop <- general_data$Pop[match(row.names(genotype_data), general_data$Isolate)]
@@ -1474,50 +1555,6 @@ genotype_data$Long <- general_data$Long[match(row.names(genotype_data), general_
 genotype_data$Lat <- general_data$Lat[match(row.names(genotype_data), general_data$Isolate)]
 
 
-  
-
-pop_data <- genotype_data %>%
-  group_by(Pop, Long, Lat, Reproduction) %>%
-  summarize(n = n(), .groups = "drop") %>%  
-  mutate(percent = n / sum(n)) %>%
-  dplyr::select(Pop, Long, Lat, Reproduction, n, percent)
-
-
-#draw map 
-
-# Creates an xyz object for use with the function draw.pie
-xyz <- make.xyz(pop_data$Long, pop_data$Lat, pop_data$percent, pop_data$Reproduction)
-
-# Create a named vector for profile colors
-profile_color_mapping <- c("Asex" = npg_colors[8], "Sex" = npg_colors[2])
-transparent_colors <- adjustcolor(profile_color_mapping, alpha.f = 0.7)
-
-
-# The plot of the pie chart above the map
-png(filename = "output/figures/map_all_years.png", units="cm", width = 18, height = 15, res = 1200, bg = "white")
-
-
-par(mai = c(0, 0, 0, 0), omi = c(0, 0, 0, 0), 
-    mgp = c(2.5, 0.5, 0))
-basemap(xlim = c(-4.3, 9.1), ylim = c(41, 51), bg = "white", axes=FALSE)
-map("france", fill = FALSE, col = "black", add = FALSE)
-final_map <- draw.pie(xyz$x, xyz$y, xyz$z, radius = 0.3, col = transparent_colors) # par size ref
-
-legend(-5, 45, legend = c("Asex", "Sex"), fill = transparent_colors, bty = "n", cex = 1, ncol = 1, text.col = "black")
-
-#view the map 
-
-dev.off() 
-
-
-
-```
-
-
-### Geographical distribution of mlp across France 2009 and 2011
-
-
-```{r , fig.width=10, fig.height=8}
 # Filter the data to include only the years 2009 and 2011
 pop_data <- genotype_data %>%
   filter(Year %in% c("2009","2011")) %>% 
@@ -1612,9 +1649,11 @@ dev.off()
 ```
 
 
-## Regression analysis 
+## Binomial GLMM on latitude and longitude - Table 3
 
-Reproduction mode with latitude, longitude, and year (all years)
+Reproductive mode as a function of latitude and longitude, fitted on the
+2009 and 2011 countrywide surveys (Methods 2.3). Sampling year enters as a
+random effect. This chunk writes manuscript Table 3 and Figure S4.
 
 ```{r, echo=FALSE}
 
@@ -1647,36 +1686,12 @@ final_table <- aggregated_data %>%
 final_table$Long <- as.numeric(final_table$Long)
 final_table$Lat <- as.numeric(final_table$Lat)
 final_table$Year <- as.numeric(final_table$Year)
-# Fit the regression model
-regression <- glm(formula = cbind(nbsex, nbAsex) ~ Lat + Long + Year,
-                  data = final_table,
-                  family = binomial)
-              
-
-# Display the summary of the regression model
-summary(regression)
 
 
-# Fit the GLMM with Year as a random effect
-glmm_model <- glmer(
-  formula = cbind(nbsex, nbAsex) ~ Lat + Long + (1 | Year),  # Year as random effect
-  data = final_table,
-  family = binomial
-)
-
-# Display the summary of the GLMM
-summary(glmm_model)
-
-tab3 <- as.data.frame(coef(summary(glmm_model)))
-tab3 <- cbind(Predictor = rownames(tab3), tab3)
-write.csv(tab3, "output/tables/Table3_GLMM_binomial_regression.csv", row.names = FALSE)
-
-```
 
 
-### Plot the regression
+### Figure S4 - effect of latitude on the proportion of sexual reproduction
 
-```{r, echo=FALSE}
 
 # Filter the data to include only the years 2009 and 2011
 final_table_filtered <- final_table %>%
@@ -1685,6 +1700,10 @@ final_table_filtered <- final_table %>%
 # Convert Year to factor in the filtered data
 final_table_filtered$Year <- as.factor(final_table_filtered$Year)
 
+# Fixed-effect glm on the same 2009 + 2011 data, kept as a sanity check that
+# the Lat and Long effects hold without the Year random effect. It is printed
+# only - it produces no figure and no table. Manuscript Fig. S4 is the GLMM
+# version built below.
 # Fit the regression model with the filtered data
 regression_filtered <- glm(formula = cbind(nbsex, nbAsex) ~ Lat + Long + Year,
                            data = final_table_filtered,
@@ -1693,44 +1712,9 @@ regression_filtered <- glm(formula = cbind(nbsex, nbAsex) ~ Lat + Long + Year,
 # Display the summary of the regression model
 summary(regression_filtered)
 
-# Create Prediction Data combination of Lat and Long with only the years 2009 and 2011
-# Generate predictions: Apply the logistic regression model to this grid to predict the probability of sexual reproduction for each combination of latitude, longitude, and year.
-
-prediction_data_filtered <- expand.grid(
-  Lat = seq(min(final_table_filtered$Lat), max(final_table_filtered$Lat), length.out = 100),
-  Long = median(final_table_filtered$Long),
-  Year = factor(c(2009, 2011))
-)
-
-# Generate predictions for the new data
-prediction_data_filtered$predicted_prob <- predict(regression_filtered, newdata = prediction_data_filtered, type = "response")
-
-# Plot the data points and logistic regression curve for Latitude
-p_lat_filtered <- ggplot(final_table_filtered, aes(x = Lat, y = nbsex / (nbsex + nbAsex))) +
-  geom_point(aes(size = nbsex + nbAsex), alpha = 0.5, shape = 16, color = "gray40") +  # Improved point aesthetics
-  geom_line(data = prediction_data_filtered, aes(x = Lat, y = predicted_prob, color = Year), 
-            linewidth = 1.2, alpha = 0.8) +  # Thicker, slightly transparent lines
-  labs(
-    x = "Latitude",
-    y = "Proportion of Sexual Reproduction",
-    caption = "Point size reflects total observations (nbsex + nbAsex)"
-  ) +
-  scale_color_manual(values = c("2009" = npg_colors[3], "2011" = npg_colors[5])) +  # Modern, distinct colors
-  scale_size_continuous(range = c(2, 8), name = "Sample Size") +  # Better size scaling
-  theme_minimal(base_size = 12) +  # Clean theme with larger text
-  theme(
-    legend.position = "top",  # Move legend to top for better layout
-    legend.title = element_blank(),  # Remove legend title
-    plot.title = element_text(face = "bold", hjust = 0.5),  # Center and bold title
-    panel.grid.minor = element_blank()  # Remove minor gridlines for clarity
-  )
-
-#p_lat_filtered
-
-# Save the plot
-#ggsave("output/figures/FigS4_effect_of_latitude.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 1200, bg = "white")
-
-
+# The glm version of the Fig. S4 plot used to be built here and immediately
+# overwritten by the GLMM version below (same object name, p_lat_filtered), and
+# its ggsave was commented out, so it never produced a file. Removed.
 
 #GLMM
 
@@ -1750,6 +1734,17 @@ rownames(glmm_coef) <- NULL
 colnames(glmm_coef) <- c("Predictor", "Estimate", "Std.Error", "z.value", "p.value")
 write.csv(glmm_coef,
           file = "output/tables/Table3_GLMM_binomial_regression.csv",
+          row.names = FALSE)
+
+# EXPORT: Results 3.3 quotes the Year random effect (variance = 13.44,
+# sd = 3.666). It was only visible in summary(glmm_model) on screen.
+glmm_ranef <- as.data.frame(lme4::VarCorr(glmm_model))
+glmm_ranef <- data.frame(Group    = glmm_ranef$grp,
+                         Variance = glmm_ranef$vcov,
+                         SD       = glmm_ranef$sdcor)
+kable(glmm_ranef, digits = 3)
+write.csv(glmm_ranef,
+          file = "output/tables/Table3_b_GLMM_random_effect_year.csv",
           row.names = FALSE)
 
 # Create prediction data for Latitude, holding Long at median, with 2009 and 2011
@@ -1809,7 +1804,9 @@ ggsave("output/figures/FigS4_effect_of_latitude_glmm.png", plot = p_lat_filtered
 
 
 
-## Creat data for ClonEstiMate
+# Rate of clonality
+
+## Input files for ClonEstiMate
 
 ```{r}
 # Create table for minimum spanning tree (MST) software by selecting relevant columns
@@ -1900,15 +1897,34 @@ head(MST_data)
 
 
 # Note: ClonEstiMate requires a specific column layout with paired unnamed allele
-# columns. write.table with sep="," preserves that structure in CSV format.
+# columns. write.table keeps that structure because quote = FALSE and
+# col.names = TRUE leave the empty second allele headers empty.
+#
+# The same table is written twice, on purpose:
+#   .csv - archive copy. Standard, opens in Excel, and is the version listed in
+#          README.md and deposited with the repository.
+#   .txt - working copy, tab-delimited. This is the file to load into
+#          ClonEstiMate, which reads plain text.
+# Both hold exactly the same rows; only the separator and the extension differ.
+
+clonestimate_base <- "output/tables/MST_data_mlp_pop_as_Reproduction_for_cloneEstimate"
+
+# Archive copy (comma-separated)
 write.table(MST_data,
-            "output/tables/MST_data_mlp_pop_as_Reproduction_for_cloneEstimate.csv",
+            paste0(clonestimate_base, ".csv"),
             sep = ",", quote = FALSE, row.names = FALSE, col.names = TRUE)
+
+# Working copy for the software (tab-separated)
+write.table(MST_data,
+            paste0(clonestimate_base, ".txt"),
+            sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
 ```
 
 
 
-## Abundance of diffrent asexual lineages 
+# Persistence and distribution of asexual lineages (manuscript Results 3.5)
+
+## Figure 4 - abundance of asexual lineages, by region (A) and by year (B)
 
 ```{r}
 
@@ -2023,7 +2039,7 @@ ggsave("output/figures/Fig4_asex_mll_Year_Locations.png", combined_plot, width =
 ```
 
 
-## Fisher's exact test for each asexual MLL and Year
+## Fisher's exact tests - lineage by year and lineage by region
 
 ```{r}
 asexual_lineages_years <- dat1 %>%
@@ -2066,95 +2082,79 @@ print(contingency_table_location_mll)
 fisher_matrix_locations_mll <- as.matrix(contingency_table_location_mll[, -1])
 
 fisher_result_locations_mll <- fisher.test(fisher_matrix_locations_mll, simulate.p.value = TRUE, B = 1e5) # 100,000 simulations
-#print(fisher_result_locations_mll)
+print(fisher_result_locations_mll)
+
+# EXPORT: Results 3.5 quotes P = 1e-05 for both the temporal and the spatial
+# test, but the spatial result was not even printed. Both are exported here,
+# together with the two contingency tables they are computed from.
+fisher_mll_tests <- data.frame(
+  Test       = c("Asexual MLL x Year", "Asexual MLL x Region"),
+  p_value    = c(fisher_result_year_mll$p.value,
+                 fisher_result_locations_mll$p.value),
+  replicates = 1e5
+)
+kable(fisher_mll_tests, digits = 6)
+write.csv(fisher_mll_tests,
+          file = "output/tables/Table_fisher_MLL_year_region.csv",
+          row.names = FALSE)
+write.csv(contingency_table_year_mll,
+          file = "output/tables/Table_contingency_asexual_MLL_by_year.csv",
+          row.names = FALSE)
+write.csv(contingency_table_location_mll,
+          file = "output/tables/Table_contingency_asexual_MLL_by_region.csv",
+          row.names = FALSE)
 
 
 
 
 ```
 
-## This summarizes per_variant to understand better the diveristy come from the mutation or recombination
+# Supplementary analyses
+
+
+## Table S2 - late-season samplings at Cavalaire-sur-Mer
+
 ```{r}
-# Is within-lineage diversity generated by mutation or by recombination?
-# For each asexual lineage (MLL), we compare every distinct genotype to the
-# lineage's most common ("central") genotype and count how many loci differ:
-#   1 differing locus  -> single mutational step (mutation)
-#   >=3 differing loci -> multilocus reshuffling (recombination-like)
+# EXPORT: Results 3.5 describes the February samplings at Cavalaire-sur-Mer
+# (8 individuals in 2014, 40 in 2024), how many lineages they belong to, and
+# whether each lineage is asexual or sexual. None of it was produced by the
+# code, so none of those numbers could be reproduced from the repository.
+# This chunk rebuilds them and writes them out.
 
-library(adegenet); library(poppr); library(dplyr)
+cav_site <- general_data$Site[match(rownames(genotype_data), general_data$Isolate)]
+cavalaire <- genotype_data[grepl("Cavalaire", cav_site, ignore.case = TRUE), ]
 
-asexual_genind <- data_GenInd_Asex_MLL          # asexual isolates; pop() == organised_MLL
-genotype_table <- genind2df(asexual_genind, sep = "/")
-lineage_id     <- genotype_table$pop
-genotype_table$pop <- NULL
-locus_names    <- colnames(genotype_table)
+cavalaire_summary <- cavalaire %>%
+  group_by(Year, organised_MLL, Reproduction) %>%
+  summarise(N_individuals = n(), .groups = "drop") %>%
+  arrange(Year, desc(N_individuals))
 
-# Make allele order irrelevant so 100/102 == 102/100
-sort_alleles <- function(locus_column) {
-  vapply(strsplit(locus_column, "/"),
-         function(alleles) paste(sort(alleles), collapse = "/"),
-         character(1))
-}
-genotype_sorted <- as.data.frame(lapply(genotype_table, sort_alleles),
-                                 stringsAsFactors = FALSE)
-colnames(genotype_sorted) <- locus_names
+# Years in which each of these lineages was sampled anywhere in France, so the
+# persistence statements in the text ("an older lineage sampled in 1993, 1996
+# and 2004", "extensively resampled in 2020") can be checked directly.
+cavalaire_summary$Years_sampled_overall <- sapply(
+  cavalaire_summary$organised_MLL,
+  function(m) paste(sort(unique(genotype_data$Year[genotype_data$organised_MLL == m])),
+                    collapse = ", "))
 
-# For each lineage: compare every distinct genotype to the central (most common) one
-variant_differences <- do.call(rbind, lapply(unique(lineage_id), function(this_lineage) {
-  lineage_genotypes <- genotype_sorted[lineage_id == this_lineage, , drop = FALSE]
-  if (nrow(lineage_genotypes) < 2) return(NULL)
+# Number of distinct MLGs per lineage at this site
+cavalaire_summary$N_MLG <- sapply(
+  seq_len(nrow(cavalaire_summary)),
+  function(i) length(unique(cavalaire$MLG[
+    cavalaire$organised_MLL == cavalaire_summary$organised_MLL[i] &
+    cavalaire$Year          == cavalaire_summary$Year[i]])))
 
-  genotype_string   <- apply(lineage_genotypes, 1, paste, collapse = "|")
-  genotype_counts   <- sort(table(genotype_string), decreasing = TRUE)
-  if (length(genotype_counts) < 2) return(NULL)          # single genotype: no diversity
+cavalaire_summary <- cavalaire_summary[, c("Year", "organised_MLL", "Reproduction",
+                                           "N_individuals", "N_MLG",
+                                           "Years_sampled_overall")]
+colnames(cavalaire_summary) <- c("Year", "MLL", "Reproduction", "N", "MLG",
+                                 "Years sampled overall")
 
-  central_alleles   <- strsplit(names(genotype_counts)[1], "\\|")[[1]]
-  variant_genotypes <- names(genotype_counts)[-1]
+kable(cavalaire_summary)
+write.csv(cavalaire_summary,
+          file = "output/tables/Table_S2_cavalaire_february_samplings.csv",
+          row.names = FALSE)
 
-  do.call(rbind, lapply(variant_genotypes, function(variant) {
-    variant_alleles <- strsplit(variant, "\\|")[[1]]
-    comparable      <- !(is.na(central_alleles) | is.na(variant_alleles) |
-                         central_alleles == "NA" | variant_alleles == "NA")
-    data.frame(lineage           = this_lineage,
-               n_isolates_variant = as.integer(genotype_counts[variant]),
-               loci_differing     = sum(central_alleles[comparable] != variant_alleles[comparable]))
-  }))
-}))
-
-# Overall breakdown (these are the numbers quoted in the Discussion)
-cat(sprintf("1 locus: %.1f%%   2 loci: %.1f%%   >=3 loci: %.1f%%   (n = %d variants)\n",
-    100 * mean(variant_differences$loci_differing == 1,  na.rm = TRUE),
-    100 * mean(variant_differences$loci_differing == 2,  na.rm = TRUE),
-    100 * mean(variant_differences$loci_differing >= 3,  na.rm = TRUE),
-    sum(!is.na(variant_differences$loci_differing))))
-
-# Table S2: one row per asexual lineage
-within_lineage_summary <- variant_differences %>%
-  group_by(lineage) %>%
-  summarise(
-    n_variant_genotypes = n(),
-    variants_1_locus    = sum(loci_differing == 1,  na.rm = TRUE),
-    variants_2_loci     = sum(loci_differing == 2,  na.rm = TRUE),
-    variants_3plus_loci = sum(loci_differing >= 3,  na.rm = TRUE),
-    max_loci_differing  = ifelse(all(is.na(loci_differing)), 0L,
-                                 max(loci_differing, na.rm = TRUE)),
-    .groups = "drop"
-  )
-
-# Add total isolates per lineage, keep the real MLL (organised_MLL) labels
-isolates_per_lineage <- as.data.frame(table(pop(asexual_genind)))
-colnames(isolates_per_lineage) <- c("lineage", "n_isolates_total")
-isolates_per_lineage$lineage <- as.integer(as.character(isolates_per_lineage$lineage))
-
-tableS2 <- merge(isolates_per_lineage, within_lineage_summary, by = "lineage", all.x = TRUE)
-tableS2[is.na(tableS2)] <- 0                              # lineages with no internal variants
-tableS2$Lineage <- paste0("MLL", tableS2$lineage)        # real labels, not renumbered
-tableS2 <- tableS2[order(-tableS2$n_isolates_total), ]
-tableS2 <- tableS2[, c("Lineage", "n_isolates_total", "n_variant_genotypes",
-                       "variants_1_locus", "variants_2_loci",
-                       "variants_3plus_loci", "max_loci_differing")]
-
-print(tableS2)
-write.csv(tableS2, "output/tables/Table_S2_within_lineage_variation_asexual.csv", row.names = FALSE)
+# One-line check against the text: total per year
+print(table(cavalaire$Year, cavalaire$Reproduction))
 ```
-

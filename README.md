@@ -1,4 +1,4 @@
-# Population Genetics of *Melampsora larici-populina* 
+# Population Genetics of *Melampsora larici-populina*
 
 Microsatellite-based workflow for population genetic analysis of *Melampsora larici-populina* isolates.
 
@@ -35,68 +35,18 @@ The entire analysis environment is packaged in a Docker image. No R installation
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (free, works on macOS / Windows / Linux)
 
-## How to run
+### Verified setup (used by the data editor)
 
-Four ways to run the workflow. All produce identical outputs in
-`output/figures/` (plots) and `output/tables/` (data tables).
-
-- [Option A: Run natively in R](#option-a-run-natively-in-r) — fastest; recommended for Apple Silicon Macs
-- [Option B: Pre-built Docker image](#option-b-pre-built-docker-image) — most reproducible, one command
-- [Option C: Stock rocker image](#option-c-stock-rocker-image) — the environment is good
-- [Option D: HPC cluster with Singularity](#option-d-hpc-cluster-with-singularity) — for shared compute clusters
-
-> **Performance note:** the Docker/Singularity images are built for `linux/amd64`.
-> On Intel, Linux, and HPC nodes they run natively. On **Apple Silicon (M-series)
-> Macs** they run through emulation, which is much slower — a full run can take
-> several hours. On Apple Silicon, prefer **Option A**.
-
-### Option A: Run natively in R
-
-Requires **R 4.4.1** or later (RStudio optional, for interactive use).
+The analysis was reviewed and verified using the `rocker/geospatial:4.4.1` image:
 
 ```bash
-git clone https://github.com/ammarabdalrahem/poplar_rust.git
-cd poplar_rust
-Rscript data_analysis_mlp_new.R
-```
-
-On the first run the script installs any missing R packages automatically
-(CRAN → Bioconductor → GitHub); this needs an internet connection and may take a
-few minutes. The analysis then runs at native speed. For interactive work, open
-`data_analysis_mlp.Rmd` in RStudio instead.
-
-### Option B: Pre-built Docker image
-
-A ready-to-run image with every dependency baked in, published to the GitHub
-Container Registry. No build step required.
-
-```bash
-# Pull the latest published image
-docker pull --platform linux/amd64 ghcr.io/ammarabdalrahem/poplar_rust:latest
-
-# Run it, collecting results into ./output on your machine
-docker run --platform linux/amd64 --rm \
-  -v "$(pwd)/output:/project/output" \
-  ghcr.io/ammarabdalrahem/poplar_rust:latest
-```
-
-To pin a specific version instead of `latest`, use the version tag, e.g.
-`ghcr.io/ammarabdalrahem/poplar_rust:1.0`.
-
-> **On Windows PowerShell**, replace `$(pwd)` with `${PWD}`.
-
-### Option C: Stock rocker image
-
-Runs the script inside the public `rocker/geospatial:4.4.1` image (the setup the
-data editor used to verify the analysis). Packages are installed at runtime, so
-the first run takes longer and needs internet.
-
-```bash
+# 1. Clone the repository
 git clone https://github.com/ammarabdalrahem/poplar_rust.git
 cd poplar_rust
 
-docker run --platform linux/amd64 --rm \
-  -v "$(pwd):/project" \
+# 2. Run the analysis
+docker run --rm \
+  -v $(pwd):/project \
   -w /project \
   rocker/geospatial:4.4.1 \
   Rscript data_analysis_mlp_new.R
@@ -104,37 +54,38 @@ docker run --platform linux/amd64 --rm \
 
 > **On Windows PowerShell**, replace `$(pwd)` with `${PWD}`.
 
-### Option D: HPC cluster with Singularity
+### Custom pre-built image (all packages pre-installed)
 
-For shared clusters where Docker isn't available. Works the same with
-**Apptainer** — just replace `singularity` with `apptainer` and the
-`SINGULARITY_` variables with `APPTAINER_`.
+A ready-to-run image with every dependency baked in is published to the GitHub
+Container Registry. No build step is required:
 
 ```bash
-# 1. Many clusters mount /tmp as 'noexec', which breaks the SIF build.
-#    Point Singularity's temp + cache at an exec-allowed path (home or scratch).
-export SINGULARITY_TMPDIR=$HOME/sing_tmp
-export SINGULARITY_CACHEDIR=$HOME/sing_cache
-mkdir -p "$SINGULARITY_TMPDIR" "$SINGULARITY_CACHEDIR"
+# Pull the latest published image
+docker pull ghcr.io/ammarabdalrahem/poplar_rust:latest
 
-# 2. Pull the image (creates poplar_rust_latest.sif)
-singularity pull docker://ghcr.io/ammarabdalrahem/poplar_rust:latest
-
-# 3. Run it. --pwd /project makes the script find its files;
-#    the bind mount writes results to ./output on the host.
-mkdir -p output
-singularity exec --pwd /project \
-  --bind "$(pwd)/output:/project/output" \
-  poplar_rust_latest.sif \
-  Rscript data_analysis_mlp_new.R
+# Run it, collecting results into ./output on your machine
+docker run --rm \
+  -v "$(pwd)/output:/project/output" \
+  ghcr.io/ammarabdalrahem/poplar_rust:latest
 ```
 
-If `$HOME` is quota-limited or also `noexec`, use your cluster's scratch space
-(e.g. `/scratch/$USER`) for `SINGULARITY_TMPDIR` and `SINGULARITY_CACHEDIR`, or
-ask your HPC admin which filesystem permits execution.
+> **On Windows PowerShell**, replace `$(pwd)` with `${PWD}`.
 
 After the run, outputs appear in `output/figures/` and `output/tables/` inside your local project folder.
 
+### How the image is built and pinned
+
+The image is defined by the `Dockerfile` and rebuilt automatically by GitHub
+Actions (`.github/workflows/docker-publish.yml`) on every push to `main` and on
+each version tag, then pushed to `ghcr.io/ammarabdalrahem/poplar_rust`.
+Pushing a tag such as `v1.0` publishes both `:1.0` and `:latest`.
+
+For long-term reproducibility, package versions are frozen:
+
+- **Base image:** `rocker/geospatial:4.4.1` (R 4.4.1 + the full geospatial stack, the environment verified by the data editor)
+- **CRAN:** pinned to a dated [Posit Package Manager](https://packagemanager.posit.co/) snapshot (`PKG_SNAPSHOT` build arg) so the same versions resolve on every build
+- **Bioconductor:** pinned to release `3.20`
+- **GitHub packages:** `rnaturalearthhires` pinned to an exact commit
 
 ---
 
@@ -230,16 +181,25 @@ Requirements:
 | `Table1_b_genetic_indices_resampling_approach.csv` | Genetic indices per reproduction mode (resampling approach) | Table 1 |
 | `Table1_c_genetic_indices_combination_approaches.csv` | Genetic indices per reproduction mode (combined approach) | Table 1 |
 | `Table2_contingency_clustering_vs_resampling.csv` | Contingency table: cluster vs resampling assignments | Table 2 |
-| `Table3_GLMM_binomial_regression.csv` | GLMM fixed-effect coefficients (binomial, Lat + Long + Year) | Table 3 |
+| `Table2_b_fisher_test_clustering_vs_resampling.csv` | Fisher's exact test: p-value, odds ratio, CI | Results 3.2 |
+| `Table3_GLMM_binomial_regression.csv` | GLMM fixed-effect coefficients (binomial, Lat + Long, 2009 and 2011) | Table 3 |
+| `Table3_b_GLMM_random_effect_year.csv` | GLMM random effect of Year (variance, SD) | Results 3.3 |
 | `Table4_top7_asexual_MLLs.csv` | Characteristics of the seven most abundant asexual MLLs | Table 4 |
+| `Table_S2_cavalaire_february_samplings.csv` | February samplings at Cavalaire-sur-Mer, by year and lineage | Table S2 |
+| `Table_MLL_delineation_summary.csv` | Number of MLGs, number of MLLs, MLL distance thresholds | Results 3.1 |
+| `Table_DAPC_crossvalidation_summary.csv` | Optimal PCs, mean correct reassignment, variance explained | Methods 2.3 |
+| `Table_fisher_MLL_year_region.csv` | Fisher's exact tests: asexual MLL x year and x region | Results 3.5 |
+| `Table_contingency_asexual_MLL_by_year.csv` | Contingency table behind the temporal Fisher test | — |
+| `Table_contingency_asexual_MLL_by_region.csv` | Contingency table behind the spatial Fisher test | — |
 | `Table_asexual_MLL_genetic_indices.csv` | Full genetic indices for all asexual MLLs | — |
 | `genetic_indices_per_sexual_MLL.csv` | Genetic indices per sexual MLL | — |
 | `new_genotype_data.csv` | Final per-isolate table with cluster and reproduction labels | — |
 | `filtered_mll_years.csv` | MLLs recurring across multiple sampling years | — |
-| `MST_data_mlp_pop_as_Reproduction_for_cloneEstimate.csv` | Minimum-spanning-tree export for ClonEstiMate | — |
+| `MST_data_mlp_pop_as_Reproduction_for_cloneEstimate.csv` | ClonEstiMate input, comma-separated (archive copy) | — |
+| `MST_data_mlp_pop_as_Reproduction_for_cloneEstimate.txt` | ClonEstiMate input, tab-separated (load this one into the software) | — |
 
 > **Note on Table 1 — Pareto β column:** this statistic is computed by the external
-> software [GenAPoPop](https://forge.inrae.fr/solenn.stoeckel/genapopop1.0) and cannot be produced by
+> software [GenAPoPop](https://www6.inrae.fr/genapopop) and cannot be produced by
 > this R script. Run GenAPoPop separately on the same isolate data and insert the
 > resulting Pareto β values into the exported CSV before final publication.
 
@@ -250,25 +210,39 @@ Requirements:
 | `FigS1_geographic_distribution.svg` | Sampling map (all isolates) | Fig. S1 |
 | `FigS2_Silhouette_kmeans.png` | Silhouette plot for k-means cluster evaluation | Fig. S2 |
 | `FigS3_cluster_assignments.png` | Cluster assignment probability scatter plot | Fig. S3 |
-| `FigS4_effect_of_latitude.png` | GLM: proportion of sexual reproduction vs latitude | Fig. S4 |
 | `FigS4_effect_of_latitude_glmm.png` | GLMM: proportion of sexual reproduction vs latitude | Fig. S4 |
-| `Fig2_geographical_distribution_2009_2011.png` | Map of sexual vs asexual proportions, 2009 and 2011 | Fig. 2 |
-| `Fig3a_tree_plot1.png` | Circular NJ phylogenetic tree (branches only) | Fig. 3 |
+| `Fig2_geographical_distribution_2009_2011.svg` | Map of sexual vs asexual proportions, 2009 and 2011 | Fig. 2 |
 | `Fig3_tree_nj_plot.png` | Annotated NJ tree with MLL rings | Fig. 3 |
-| `Fig4A_asex_mll_Locations.png` | Asexual lineage abundance across sampling locations | Fig. 4A |
-| `Fig4B_asex_mll_Year.png` | Asexual lineage abundance across years | Fig. 4B |
-| `Fig4_asex_mll_Year_Locations.png` | Combined lineage abundance figure | Fig. 4 |
-| `Dapc_xval.png` | DAPC cross-validation plot | — |
-| `DAPC_scatter.png` | DAPC scatter plot | — |
-| `DAPC_compoplot.png` | DAPC composition plot | — |
-| `map_all_years.png` | Map of sexual vs asexual proportions across all years | — |
+| `Fig4A_asex_mll_Locations.png` | Asexual lineage abundance across French regions (panel A) | Fig. 4A |
+| `Fig4B_asex_mll_Year.png` | Asexual lineage abundance across years (panel B) | Fig. 4B |
+| `Fig4_asex_mll_Year_Locations.png` | Combined two-panel lineage abundance figure | Fig. 4 |
+
+> **Figure 1 of the manuscript** (the *M. larici-populina* life cycle) is a drawn
+> schematic and is not produced by this code.
+
+> **Note on Figure 3 — `tree_nj_boot1000.rds`:** the neighbour-joining tree with
+> 1,000 bootstrap replicates (`poppr::aboot`) is too slow to run on a laptop, so
+> it was computed separately on a compute server and the result saved as
+> `tree_nj_boot1000.rds`, which ships with this repository. The script loads that
+> file instead of recomputing the tree, and Figure 3 is drawn from it. The
+> `aboot()` call that produced it is kept in the script, commented out directly
+> above the `readRDS()` line, so the tree can be regenerated from scratch on a
+> machine with enough resources:
+>
+> ```r
+> tree2 <- aboot(final_GenInd, distance = diss.dist, tree = "nj",
+>                missing = "asis", sample = 1000, quiet = TRUE, threads = 20)
+> ```
 
 ---
 
 ## Notes
 
-- `data_analysis_mlp_new.R` and `data_analysis_mlp.Rmd` produce **identical outputs** with identical file names
-- The Docker image `rocker/geospatial:4.4.1` and the custom image `ghcr.io/ammarabdalrahem/poplar_rust:1.0` both contain R 4.4.1 with all required packages
+- `data_analysis_mlp.Rmd` is the reference workflow. `data_analysis_mlp_new.R` is a
+  plain-R mirror of it; the two are currently **not** identical (the .R script does
+  not write `Fig2_geographical_distribution_2009_2011`, and saves Fig. 3 at a
+  different resolution). Re-sync the .R from the .Rmd before archiving.
+- The Docker image `rocker/geospatial:4.4.1` (verified by the PCI data editor) and the custom image `ghcr.io/ammarabdalrahem/poplar_rust:1.0` both contain R 4.4.1 with all required packages
 - When run outside Docker, the script installs any missing packages automatically in dependency-ordered layers (CRAN core → spatial → genetics → Bioconductor → GitHub); a first run on a clean R installation may take several minutes
 - Isolates with uncertain cluster assignment are excluded from downstream analyses
 - The **Pareto β** column in Table 1 requires a separate GenAPoPop run (see note above)
@@ -277,22 +251,9 @@ Requirements:
 
 ## Citation
 
-This repository accompanies the article below. If you use this workflow or the
-Docker image, please cite **both** the article and the archived software.
+If you use this workflow or the associated Docker image, please cite:
 
-**Article (preprint)**
-
-> Abdalrahem, A., Andrieux, A., Becheler, R., Duplessis, S., Frey, P.,
-> Marçais, B., Schiffer-Forsyth, K., Stoeckel, S., & Halkett, F. (2025).
-> *Long-lasting coexistence of multiple asexual lineages alongside their sexual
-> counterparts in a fungal plant pathogen.* bioRxiv 2025.03.28.645883.
-> https://doi.org/10.1101/2025.03.28.645883
-
-**Software / data archive (this repository)**
-
-> Abdalrahem, A. (2025). *poplar_rust: population-genetics workflow for*
-> Melampsora larici-populina [Software]. Zenodo.
-> https://doi.org/10.5281/zenodo.15100450
+> Abdalrahem, A., et al. (2026). Long-lasting coexistence of multiple asexual lineages alongside their sexual counterparts in a fungal plant pathogen.
 
 ---
 

@@ -1,10 +1,18 @@
 # syntax=docker/dockerfile:1
+# check=skip=FromPlatformFlagConstDisallowed
+#
+# The check directive above silences the BuildKit lint warning about the
+# pinned --platform on the FROM line. The pin is deliberate: the rocker base
+# image is published for linux/amd64 only, so there is no second architecture
+# to build for, and fixing the platform is what makes the environment
+# reproducible across machines.
 #
 # Reproducible environment for the population-genetics workflow of
 # Melampsora larici-populina (microsatellite markers).
 #
-#   Build:  docker build -t poplar_rust .
-#   Run:    docker run --rm -v "$(pwd)/output:/project/output" poplar_rust
+#   Build:  docker build --platform=linux/amd64 -t poplar_rust .
+#   Run:    docker run --rm --platform=linux/amd64 \
+#             -v "$(pwd)/output:/project/output" poplar_rust
 #
 # The analysis takes exactly two input files, both shipped in the image:
 #   Table_S1.csv          genotypes and metadata for the 2,122 individuals
@@ -22,7 +30,15 @@
 # (GDAL / GEOS / PROJ, sf, terra, stars) and the tidyverse, all precompiled.
 # This is the environment the PCI data editor used to verify the analysis, so
 # the container reproduces that review setup exactly.
-FROM rocker/geospatial:4.4.1
+#
+# --platform=linux/amd64 is required, not optional. The rocker images are
+# published for linux/amd64 only, so on an Apple Silicon Mac (M1/M2/M3/M4) the
+# build otherwise fails at this line with "no matching manifest for
+# linux/arm64/v8". Pinning the platform also means the image is byte-identical
+# whoever builds it - on a Mac, on an Intel machine, or in GitHub Actions - so
+# the environment really is the same one used to produce the published results.
+# On Apple Silicon the container runs under Rosetta emulation and is slower.
+FROM --platform=linux/amd64 rocker/geospatial:4.4.1
 
 LABEL org.opencontainers.image.source="https://github.com/ammarabdalrahem/poplar_rust"
 LABEL org.opencontainers.image.description="Reproducible population-genetics workflow for Melampsora larici-populina (microsatellite markers)."

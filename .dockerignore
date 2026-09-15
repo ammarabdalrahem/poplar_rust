@@ -1,5 +1,6 @@
 # Keep the Docker build context small and the image clean.
-# Only Table_S1.csv and data_analysis_mlp_new.R are needed by the build.
+# The build needs exactly three files:
+#   Table_S1.csv, tree_nj_boot1000.rds, data_analysis_mlp_new.R
 
 # Version control
 .git
@@ -17,6 +18,11 @@
 
 # Generated results (regenerated inside the container)
 output/
+data/
+
+# Local backups
+*.bak
+*.bak_*
 
 # Docs and source variants not needed at build time
 README.md

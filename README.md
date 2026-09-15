@@ -236,19 +236,6 @@ Requirements:
 
 ---
 
-## Notes
-
-- `data_analysis_mlp.Rmd` is the reference workflow. `data_analysis_mlp_new.R` is a
-  plain-R mirror of it; the two are currently **not** identical (the .R script does
-  not write `Fig2_geographical_distribution_2009_2011`, and saves Fig. 3 at a
-  different resolution). Re-sync the .R from the .Rmd before archiving.
-- The Docker image `rocker/geospatial:4.4.1` (verified by the PCI data editor) and the custom image `ghcr.io/ammarabdalrahem/poplar_rust:1.0` both contain R 4.4.1 with all required packages
-- When run outside Docker, the script installs any missing packages automatically in dependency-ordered layers (CRAN core → spatial → genetics → Bioconductor → GitHub); a first run on a clean R installation may take several minutes
-- Isolates with uncertain cluster assignment are excluded from downstream analyses
-- The **Pareto β** column in Table 1 requires a separate GenAPoPop run (see note above)
-
----
-
 ## Citation
 
 If you use this workflow or the associated Docker image, please cite:

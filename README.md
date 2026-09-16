@@ -27,51 +27,115 @@ Ammar Abdalrahem, Axelle Andrieux, Ronan Becheler, Sébastien Duplessis, Pascal 
 
 ---
 
-## Fully reproducible with Docker
+## How to run
 
-The entire analysis environment is packaged in a Docker image. No R installation, no package management, no dependency conflicts.
+There are three routes. All three produce the same files in `output/figures/` and
+`output/tables/` — choose whichever suits you.
 
-### Prerequisites
+| Route | R needed on your machine? | Best for |
+|-------|---------------------------|----------|
+| **1. Pre-built Docker image** | no | reproducing the published results with one command |
+| **2. Docker, base image + this code** | no | verifying the analysis from the plain `rocker` base |
+| **3. Locally in R** | yes | reading the code, inspecting objects, re-using parts |
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (free, works on macOS / Windows / Linux)
+> **Apple Silicon Macs (M1/M2/M3/M4).** The `rocker` base image is published for
+> `linux/amd64` only, so every Docker command below passes `--platform=linux/amd64`
+> and the `Dockerfile` pins the same platform. Without it Docker stops with
+> *"no matching manifest for linux/arm64/v8"*. The container then runs under Rosetta
+> emulation and is slower than on an Intel machine. The flag is harmless on Intel
+> Macs, Windows and Linux, and it guarantees everyone builds the same architecture.
 
-### Verified setup (used by the data editor)
+> **On Windows PowerShell**, replace `$(pwd)` with `${PWD}` in every command.
 
-The analysis was reviewed and verified using the `rocker/geospatial:4.4.1` image:
+---
+
+### Route 1 — pre-built image (fastest, nothing to install)
+
+Every dependency is already baked into the image, so the analysis starts immediately.
 
 ```bash
-# 1. Clone the repository
+docker pull --platform=linux/amd64 ghcr.io/ammarabdalrahem/poplar_rust:latest
+
+docker run --rm --platform=linux/amd64 \
+  -v "$(pwd)/output:/project/output" \
+  ghcr.io/ammarabdalrahem/poplar_rust:latest
+```
+
+Results appear in `output/` in the folder you ran the command from.
+
+To check what the image contains without running the analysis:
+
+```bash
+docker run --rm --platform=linux/amd64 \
+  ghcr.io/ammarabdalrahem/poplar_rust:latest ls -la /project
+```
+
+### Route 2 — plain `rocker/geospatial` base image
+
+This is the setup the PCI data editor used. It mounts this repository into a clean
+`rocker/geospatial:4.4.1` container and runs the script there.
+
+```bash
 git clone https://github.com/ammarabdalrahem/poplar_rust.git
 cd poplar_rust
 
-# 2. Run the analysis
-docker run --rm \
-  -v $(pwd):/project \
+docker run --rm --platform=linux/amd64 \
+  -v "$(pwd)":/project \
   -w /project \
   rocker/geospatial:4.4.1 \
   Rscript data_analysis_mlp_new.R
 ```
 
-> **On Windows PowerShell**, replace `$(pwd)` with `${PWD}`.
+> This route is considerably slower than Route 1: the base image does not contain
+> the genetics packages, so R installs `adegenet`, `poppr`, `ggtree` and the rest
+> inside the container on every run.
 
-### Custom pre-built image (all packages pre-installed)
+### Route 3 — locally in R
 
-A ready-to-run image with every dependency baked in is published to the GitHub
-Container Registry. No build step is required:
+Requires **R 4.4.1 or later**. Missing packages are installed automatically the
+first time the script runs, in dependency order (CRAN core → spatial → genetics →
+Bioconductor → GitHub), which can take several minutes on a clean installation.
+
+Clone the repository and make sure your working directory is the repository root,
+so that `Table_S1.csv` and `tree_nj_boot1000.rds` are found:
 
 ```bash
-# Pull the latest published image
-docker pull ghcr.io/ammarabdalrahem/poplar_rust:latest
-
-# Run it, collecting results into ./output on your machine
-docker run --rm \
-  -v "$(pwd)/output:/project/output" \
-  ghcr.io/ammarabdalrahem/poplar_rust:latest
+git clone https://github.com/ammarabdalrahem/poplar_rust.git
+cd poplar_rust
 ```
 
-> **On Windows PowerShell**, replace `$(pwd)` with `${PWD}`.
+**3a. From the command line**
 
-After the run, outputs appear in `output/figures/` and `output/tables/` inside your local project folder.
+```bash
+Rscript data_analysis_mlp_new.R
+```
+
+Run it top to bottom in a clean session. Sections share objects, so they cannot be
+run out of order. To also see the printed tables and model summaries scroll past,
+use `R -e 'source("data_analysis_mlp_new.R", echo = TRUE)'` instead.
+
+**3b. In RStudio, with Knit**
+
+1. Open **`data_analysis_mlp.Rmd`** in RStudio
+2. Make sure the working directory is the repository root — the file does this
+   itself when knitting, and for chunk-by-chunk work you can set it with
+   **Session → Set Working Directory → To Source File Location**
+3. Click **Knit** (or press **Cmd/Ctrl + Shift + K**)
+
+Knitting runs the whole analysis and produces `data_analysis_mlp.html`: a single
+report with a numbered, floating table of contents, every figure and table inline,
+and foldable code blocks. The same files are written to `output/` as in the other
+routes.
+
+To work through the analysis step by step instead, run the chunks in order with the
+green arrow on each chunk, or **Run → Run All**. Do not start from a chunk in the
+middle — later sections depend on objects created earlier.
+
+> `data_analysis_mlp.Rmd` and `data_analysis_mlp_new.R` contain identical code in
+> identical order. The `.Rmd` is the reference version: edit it first, then
+> regenerate the script with
+> `knitr::purl("data_analysis_mlp.Rmd", output = "data_analysis_mlp_new.R", documentation = 2)`
+> so the two cannot drift apart.
 
 ### How the image is built and pinned
 
@@ -95,7 +159,8 @@ For long-term reproducibility, package versions are frozen:
 |------|-------------|
 | `data_analysis_mlp_new.R` | Main R script — use for terminal / Docker execution |
 | `data_analysis_mlp.Rmd` | R Markdown version — use for interactive work in RStudio |
-| `Table_S1.csv` | Input data: isolate metadata and microsatellite genotypes (Table S1) |
+| `Table_S1.csv` | **Input 1:** isolate metadata and microsatellite genotypes (Table S1) |
+| `tree_nj_boot1000.rds` | **Input 2:** neighbour-joining tree, 1,000 bootstrap replicates, precomputed (Figure 3) |
 | `Dockerfile` | Docker image definition for full reproducibility |
 | `.dockerignore` | Files excluded from the Docker build context |
 | `.github/workflows/docker-publish.yml` | CI: builds the image and publishes it to GHCR |
@@ -103,16 +168,12 @@ For long-term reproducibility, package versions are frozen:
 
 ---
 
-## Manual setup (without Docker)
+## Installing the R packages by hand
 
-### Requirements
-
-- R 4.4.1 or later
-- RStudio recommended for interactive work
-
-### R packages
-
-Packages are installed automatically in dependency order when the script is first run. To install manually:
+Route 3 installs everything automatically on first run, so this section is only
+needed if you would rather control the installation yourself, or if a layer failed
+and you want to retry it on its own. The order matters: packages with heavy system
+dependencies must be built before the packages that depend on them.
 
 ```r
 # Layer 1 — CRAN core
@@ -146,28 +207,30 @@ BiocManager::install(c("ggtree", "ggtreeExtra"), ask = FALSE, update = FALSE)
 remotes::install_github("dbailleul/RClone", dependencies = TRUE)
 ```
 
-### Run the script
-
-```bash
-Rscript data_analysis_mlp_new.R
-```
-
-On first run the script will:
-1. Create `output/figures/` and `output/tables/` directories
-2. Write all outputs into those subdirectories
-
 ---
 
-## Input format
+## Inputs
+
+The workflow takes exactly two input files, both in the repository root and both
+shipped inside the Docker image. Everything else is generated by the run, into
+`output/figures/` and `output/tables/`, which are created automatically.
 
 ```text
-Table_S1.csv
+Table_S1.csv            genotypes and metadata, 2,122 individuals
+tree_nj_boot1000.rds    neighbour-joining tree, 1,000 bootstrap replicates
 ```
 
-Requirements:
+`Table_S1.csv` requirements:
 
 - Microsatellite locus columns must contain `Mlp` in the column name
 - Missing genotype values must be coded as `999`
+
+`tree_nj_boot1000.rds` is read with `readRDS()` and used only for Figure 3. It is
+precomputed because `poppr::aboot` with 1,000 replicates is too slow to run on a
+laptop or inside the container; it was produced on a compute server. The `aboot()`
+call that generated it is kept in the code, commented out immediately above the
+`readRDS()` line, so the tree can be regenerated on a machine with enough
+resources.
 
 ---
 
@@ -197,6 +260,7 @@ Requirements:
 | `filtered_mll_years.csv` | MLLs recurring across multiple sampling years | — |
 | `MST_data_mlp_pop_as_Reproduction_for_cloneEstimate.csv` | ClonEstiMate input, comma-separated (archive copy) | — |
 | `MST_data_mlp_pop_as_Reproduction_for_cloneEstimate.txt` | ClonEstiMate input, tab-separated (load this one into the software) | — |
+| `my_data.RData` | Snapshot of the working objects, for `load("output/my_data.RData")` when returning to the analysis | — |
 
 > **Note on Table 1 — Pareto β column:** this statistic is computed by the external
 > software [GenAPoPop](https://www6.inrae.fr/genapopop) and cannot be produced by

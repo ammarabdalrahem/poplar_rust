@@ -584,7 +584,7 @@ geom_text_repel(
 
 cluster_assignments
 
-ggsave("output/figures/FigS3_cluster_assignments.png", cluster_assignments, width = 8, height = 6, dpi = 600, bg = "white")
+ggsave("output/figures/FigS3_cluster_assignments.png", cluster_assignments, width = 8, height = 6, dpi = 1200, bg = "white")
 
 
 #reomve uncertin cluster
@@ -657,11 +657,7 @@ GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   Temp_Sample <- popsub(data_GenInd_Cluster, Table_PPR$Pop[i])
-<<<<<<< HEAD
-  ProbaLD[i] = ia(Temp_Sample, sample = 99, plot = F)[4] 
-=======
   ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4]
->>>>>>> f0f15b2 (Ship precomputed NJ tree in the image; write snapshot to output/)
 }
 
 
@@ -900,7 +896,7 @@ GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   Temp_Sample <- popsub(final_GenInd, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 99, plot = F)[4] # Attention c'est assez long à tourner 
+  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] # Attention c'est assez long à tourner 
 }
 
 
@@ -1040,7 +1036,7 @@ GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
 for (i in 1:Nb_Pop) {
   Temp_Sample <- popsub(final_GenInd, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 99, plot = F)[4] 
+  ProbaLD[i] = ia(Temp_Sample, sample = 999, plot = F)[4] 
 }
 
 
@@ -1155,16 +1151,6 @@ rbarD <- Table_PPR$rbarD[1:Nb_Pop]
 N <- Table_PPR$N[1:Nb_Pop]
 GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 
-<<<<<<< HEAD
-# LD
-ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
-for (i in 1:Nb_Pop) {
-  Temp_Sample <- popsub(data_GenInd_Asex_MLL, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 99, plot = F)[4]  
-}
-
-=======
->>>>>>> f0f15b2 (Ship precomputed NJ tree in the image; write snapshot to output/)
 
 # Ho, He, Fis et Ar
 
@@ -1290,16 +1276,6 @@ rbarD <- Table_PPR$rbarD[1:Nb_Pop]
 N <- Table_PPR$N[1:Nb_Pop]
 GsurN <- (Table_PPR$MLG[1:Nb_Pop]-1)/(Table_PPR$N[1:Nb_Pop]-1)
 
-<<<<<<< HEAD
-# LD
-ProbaLD <- vector(mode ="numeric", length = Nb_Pop)
-for (i in 1:Nb_Pop) {
-  Temp_Sample <- popsub(data_GenInd_Sex_MLL, Table_PPR$Pop[i])
-  ProbaLD[i] = ia(Temp_Sample, sample = 99, plot = F)[4] 
-}
-
-=======
->>>>>>> f0f15b2 (Ship precomputed NJ tree in the image; write snapshot to output/)
 
 # Ho, He, Fis et Ar
 
@@ -1505,13 +1481,9 @@ p2
 ggsave("output/figures/Fig3_tree_nj_plot.png",  p2, width = 12, height = 9,  dpi = 600, bg = "white")
 
 
-<<<<<<< HEAD
-ggsave("output/figures/Fig3_tree_nj_plot.png",  p2, width = 12, height = 9, dpi = 600, bg = "white")
-=======
 # =============================================================================
 # 6. Spatial distribution of reproductive modes (manuscript Results 3.3)
 # =============================================================================
->>>>>>> f0f15b2 (Ship precomputed NJ tree in the image; write snapshot to output/)
 
 # -----------------------------------------------------------------------------
 # 6.1 Figure 2 - geographical distribution of reproductive modes, 2009 and 2011
@@ -1674,50 +1646,8 @@ regression_filtered <- glm(formula = cbind(nbsex, nbAsex) ~ Lat + Long + Year,
                            data = final_table_filtered,
                            family = binomial)
 
-<<<<<<< HEAD
-invisible(summary(regression_filtered))
-
-# Create Prediction Data combination of Lat and Long with only the years 2009 and 2011
-# Generate predictions: Apply the logistic regression model to this grid to predict the probability of sexual reproduction for each combination of latitude, longitude, and year.
-
-prediction_data_filtered <- expand.grid(
-  Lat = seq(min(final_table_filtered$Lat), max(final_table_filtered$Lat), length.out = 100),
-  Long = median(final_table_filtered$Long),
-  Year = factor(c(2009, 2011))
-)
-
-# Generate predictions for the new data
-prediction_data_filtered$predicted_prob <- predict(regression_filtered, newdata = prediction_data_filtered, type = "response")
-
-# Plot the data points and logistic regression curve for Latitude
-p_lat_filtered <- ggplot(final_table_filtered, aes(x = Lat, y = nbsex / (nbsex + nbAsex))) +
-  geom_point(aes(size = nbsex + nbAsex), alpha = 0.5, shape = 16, color = "gray40") +  # Improved point aesthetics
-  geom_line(data = prediction_data_filtered, aes(x = Lat, y = predicted_prob, color = Year), 
-            linewidth = 1.2, alpha = 0.8) +  # Thicker, slightly transparent lines
-  labs(
-    x = "Latitude",
-    y = "Proportion of Sexual Reproduction",
-    caption = "Point size reflects total observations (nbsex + nbAsex)"
-  ) +
-  scale_color_manual(values = c("2009" = npg_colors[3], "2011" = npg_colors[5])) +  # Modern, distinct colors
-  scale_size_continuous(range = c(2, 8), name = "Sample Size") +  # Better size scaling
-  theme_minimal(base_size = 12) +  # Clean theme with larger text
-  theme(
-    legend.position = "top",  # Move legend to top for better layout
-    legend.title = element_blank(),  # Remove legend title
-    plot.title = element_text(face = "bold", hjust = 0.5),  # Center and bold title
-    panel.grid.minor = element_blank()  # Remove minor gridlines for clarity
-  )
-
-#p_lat_filtered
-
-# Save the plot
-#ggsave("output/figures/FigS4_effect_of_latitude.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 600, bg = "white")
-
-=======
 # Display the summary of the regression model
 summary(regression_filtered)
->>>>>>> f0f15b2 (Ship precomputed NJ tree in the image; write snapshot to output/)
 
 # The glm version of the Fig. S4 plot used to be built here and immediately
 # overwritten by the GLMM version below (same object name, p_lat_filtered), and
@@ -1803,12 +1733,8 @@ p_lat_filtered <- ggplot(final_table_filtered, aes(x = Lat, y = nbsex / (nbsex +
 
 p_lat_filtered
 
-<<<<<<< HEAD
-ggsave("output/figures/FigS4_effect_of_latitude_glmm.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 600, bg = "white")
-=======
 # Save GLMM regression plot
 ggsave("output/figures/FigS4_effect_of_latitude_glmm.png", plot = p_lat_filtered, width = 6, height = 4, dpi = 1200, bg = "white")
->>>>>>> f0f15b2 (Ship precomputed NJ tree in the image; write snapshot to output/)
 
 
 # =============================================================================
@@ -1978,15 +1904,8 @@ mll_years <- ggplot(asexual_lineages_years, aes(x = Year, y = n, fill = as.facto
 
 mll_years
 
-<<<<<<< HEAD
-ggsave("output/figures/Fig4B_asex_mll_Year.png", mll_years, width = 17, height = 8, dpi = 600, bg = "white")
-
-
-
-=======
 ggsave("output/figures/Fig4B_asex_mll_Year.png", mll_years, width = 17, height = 8, dpi = 1200, bg = "white")
   
->>>>>>> f0f15b2 (Ship precomputed NJ tree in the image; write snapshot to output/)
 
 # Creat data for asexual lineages
 
@@ -2026,15 +1945,8 @@ mll_locations <- ggplot(asexual_lineages_locations, aes(x = n, y = Location, fil
 
 mll_locations
 
-<<<<<<< HEAD
-ggsave("output/figures/Fig4A_asex_mll_Locations.png", mll_locations, width = 17, height = 8, dpi = 600, bg = "white")
-
-
-
-=======
 ggsave("output/figures/Fig4A_asex_mll_Locations.png", mll_locations, width = 17, height = 8, dpi = 1200, bg = "white")
   
->>>>>>> f0f15b2 (Ship precomputed NJ tree in the image; write snapshot to output/)
 
 # Add a title to the combined plot
 combined_plot <- plot_grid(
@@ -2048,7 +1960,7 @@ combined_plot <- plot_grid(
 
 combined_plot
 
-ggsave("output/figures/Fig4_asex_mll_Year_Locations.png", combined_plot, width = 10, height = 8, dpi = 600, bg = "white")
+ggsave("output/figures/Fig4_asex_mll_Year_Locations.png", combined_plot, width = 10, height = 8, dpi = 1200, bg = "white")
 
 # -----------------------------------------------------------------------------
 # 8.2 Fisher's exact tests - lineage by year and lineage by region

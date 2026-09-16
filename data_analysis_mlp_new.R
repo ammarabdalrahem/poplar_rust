@@ -56,7 +56,7 @@ install_if_missing <- function(pkgs, bioc = FALSE) {
 # 1. CRAN core
 cran_core <- c("knitr", "ggplot2", "readxl", "tidyverse", "cowplot",
                "viridis", "ggrepel", "ggsci", "scales", "dplyr",
-               "factoextra", "grid", "svglite", "reshape2")
+               "factoextra", "grid", "svglite", "reshape2", "prettymapr")
 install_if_missing(cran_core)
 
 # 2. Spatial stack

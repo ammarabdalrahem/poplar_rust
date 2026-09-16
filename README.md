@@ -72,7 +72,7 @@ docker run --rm --platform=linux/amd64 \
 
 ### Route 2 — plain `rocker/geospatial` base image
 
-This is the setup the PCI data editor used. It mounts this repository into a clean
+ It mounts this repository into a clean
 `rocker/geospatial:4.4.1` container and runs the script there.
 
 ```bash
@@ -136,20 +136,6 @@ middle — later sections depend on objects created earlier.
 > regenerate the script with
 > `knitr::purl("data_analysis_mlp.Rmd", output = "data_analysis_mlp_new.R", documentation = 2)`
 > so the two cannot drift apart.
-
-### How the image is built and pinned
-
-The image is defined by the `Dockerfile` and rebuilt automatically by GitHub
-Actions (`.github/workflows/docker-publish.yml`) on every push to `main` and on
-each version tag, then pushed to `ghcr.io/ammarabdalrahem/poplar_rust`.
-Pushing a tag such as `v1.0` publishes both `:1.0` and `:latest`.
-
-For long-term reproducibility, package versions are frozen:
-
-- **Base image:** `rocker/geospatial:4.4.1` (R 4.4.1 + the full geospatial stack, the environment verified by the data editor)
-- **CRAN:** pinned to a dated [Posit Package Manager](https://packagemanager.posit.co/) snapshot (`PKG_SNAPSHOT` build arg) so the same versions resolve on every build
-- **Bioconductor:** pinned to release `3.20`
-- **GitHub packages:** `rnaturalearthhires` pinned to an exact commit
 
 ---
 

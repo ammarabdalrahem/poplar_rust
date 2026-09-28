@@ -1430,7 +1430,7 @@ p <- ggtree(tree, aes(color = group), layout="circular") %<+% boot_df +
 #p 
 # dat1 is built in the "Shared annotation table" chunk above.
 # Filter dat1 to include MLLs
-dat1_filtered <- dat1 %>% filter(MLL %in% c(1, 2, 3, 4, 5, 6,8,9))
+dat1_filtered <- dat1 %>% filter(MLL %in% c(1, 2, 3, 4, 5, 6,7,8,9))
 dat1_filtered$MLL <- as.factor(dat1_filtered$MLL)
 dat1_filtered$Year <- as.character(dat1_filtered$Year) 
 
@@ -1442,10 +1442,10 @@ mll_color_mapping <- c(
   "4" = npg_colors[4],
   "6" = npg_colors[1],
   "5" = "grey" , #  it's sexual lineage
+  "7" = npg_colors[2], #  it's sexual lineage
   "8" = npg_colors[3],  
   "9" = npg_colors[6]
 )
-
 p2 <- p +
   geom_fruit(
     data = dat1_filtered,

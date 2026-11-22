@@ -1814,115 +1814,68 @@ ggsave("output/figures/FigS4_effect_of_latitude_glmm.png", plot = p_lat_filtered
 ## Input files for ClonEstiMate
 
 ```{r}
-# Create table for minimum spanning tree (MST) software by selecting relevant columns
-MST_data <- c("Reproduction", "Year", grep("Mlp", names(genotype_data), value = TRUE))
-MST_data <- genotype_data[, MST_data]
+# Rate of clonality: input file for ClonEstiMate (GenAPoPop)
+# One file with three populations:
+#   France_all  = all isolates pooled (mixed scenario)
+#   France_asex / France_sex = two-population scenario
 
-# convert row name to col
-MST_data <- MST_data %>%
-  mutate(Isolate = rownames(MST_data)) %>%
-  relocate(Isolate, .after = Year) %>%
-  filter (Year %in% c(2009,2011)) # keep only 2009 and 2011 data
+# ---- 1. Select 2009 and 2011 isolates ----
+mlp_cols <- grep("Mlp", names(genotype_data), value = TRUE)
 
+MST_data <- genotype_data[, c("Reproduction", "Year", mlp_cols)] %>%
+  mutate(tag = rownames(.)) %>%
+  filter(Year %in% c(2009, 2011))
 
-
-# remove rownames
-rownames(MST_data) <- NULL
-
-# Rename the second and third columns
-colnames(MST_data)[2:3] <- c("gen", "tag")
-
-# Function to split six-digit numbers into two columns
+# ---- 2. Split each six-digit genotype into two allele columns ----
 split_alleles <- function(x) {
-  a <- as.numeric(substr(x, 1, 3))
-  b <- as.numeric(substr(x, 4, 6))
-  return(data.frame(a, b))
+  data.frame(a = as.numeric(substr(x, 1, 3)),
+             b = as.numeric(substr(x, 4, 6)))
 }
+split_data <- do.call(cbind, lapply(MST_data[, mlp_cols], split_alleles))
 
-# Apply the split function to each Mlp_ column
-split_columns <- lapply(MST_data[, -c(1:3)], split_alleles)
+# ---- 3. Build the GenAPoPop table ----
+new_genotype_data <- read.csv("output/tables/new_genotype_data.csv", row.names = 1)
+status <- new_genotype_data[MST_data$tag, "Reproduction"]
 
-# Combine all split columns into a single data frame
-split_data <- do.call(cbind, split_columns)
+stopifnot(all(MST_data$Reproduction %in% c("Sex", "Asex")))
 
-# Remove the column names of each second column in the split allele pairs
-num_cols <- ncol(split_data)
-for (i in seq(2, num_cols, by = 2)) {
-  colnames(split_data)[i] <- ""
-}
-
-
-# Generate the 'ID' column as a unique identifier like 'C1', 'C2', 'C3', etc.
-MST_data$ID <- paste0("C", seq_len(nrow(MST_data)))
-
-
-# Create a new data frame with the desired format
 MST_data <- data.frame(
-  Pop = MST_data$Reproduction,
-  gen = MST_data$gen,
-  ID = MST_data$ID,
-  tag = MST_data$tag,  # assuming tag is the same as ID
-  color = "Red",  # assuming 'Red' is the color for all
-  Ploidy = 2,  # assuming ploidy is 2
-  split_data
+  Pop    = ifelse(MST_data$Reproduction == "Asex", "France_asex", "France_sex"),
+  gen    = MST_data$Year,
+  ID     = paste0("C", seq_len(nrow(MST_data))),
+  tag    = MST_data$tag,
+  color  = ifelse(status %in% "Sex", "Blue", "Red"),
+  Ploidy = 2,
+  split_data,
+  check.names = FALSE
 )
 
+# ---- 4. Add the mixed population (all rows duplicated) ----
+MST_mixed <- MST_data
+MST_mixed$Pop <- "France_all"
+MST_mixed$ID  <- paste0("M", seq_len(nrow(MST_mixed)))
+MST_data <- rbind(MST_mixed, MST_data)
 
-# Delete second col name for each allele
-colnames(MST_data)[grep("Var", colnames(MST_data))] <- ""
+# ---- 5. Remove isolates with missing alleles (999) ----
+allele_cols <- 7:ncol(MST_data)
+has_999 <- rowSums(MST_data[, allele_cols] == 999, na.rm = TRUE) > 0
+cat("Isolates removed (999):", sum(has_999), "\n")
+MST_data <- MST_data[!has_999, ]
 
+print(table(MST_data$Pop, MST_data$gen))
 
+# ---- 6. Blank the second allele name of each locus (GenAPoPop format) ----
+second_allele <- allele_cols[seq(2, length(allele_cols), by = 2)]
+names(MST_data)[second_allele] <- ""
 
-# Read the per-isolate results table
-new_genotype_data <- read.csv("output/tables/new_genotype_data.csv", row.names = 1)
-
-
-# Check the Reproduction status in new_genotype_data and update the color in MST_data
-for (i in seq_len(nrow(MST_data))) {
-  tag_name <- MST_data$tag[i]
-  
-  # Check if the tag_name exists in the row names of new_genotype_data
-  if (tag_name %in% rownames(new_genotype_data)) {
-    reproduction_status <- new_genotype_data[tag_name, "Reproduction"]
-    
-    # Update the color based on the Reproduction status
-    if (reproduction_status == "Sex") {
-      MST_data$color[i] <- "Blue"
-    } else if (reproduction_status == "Asex") {
-      MST_data$color[i] <- "Red"
-    }
-  }
-}
-
-
-# View the final MST data
-head(MST_data)
-
-# Remove any rows have missing data (999)
-
-
-# Note: ClonEstiMate requires a specific column layout with paired unnamed allele
-# columns. write.table keeps that structure because quote = FALSE and
-# col.names = TRUE leave the empty second allele headers empty.
-#
-# The same table is written twice, on purpose:
-#   .csv - archive copy. Standard, opens in Excel, and is the version listed in
-#          README.md and deposited with the repository.
-#   .txt - working copy, tab-delimited. This is the file to load into
-#          ClonEstiMate, which reads plain text.
-# Both hold exactly the same rows; only the separator and the extension differ.
-
+# ---- 7. Write files ----
+# .csv = archive copy (README / repository); .txt = tab-delimited file for GenAPoPop
 clonestimate_base <- "output/tables/MST_data_mlp_pop_as_Reproduction_for_cloneEstimate"
 
-# Archive copy (comma-separated)
-write.table(MST_data,
-            paste0(clonestimate_base, ".csv"),
-            sep = ",", quote = FALSE, row.names = FALSE, col.names = TRUE)
-
-# Working copy for the software (tab-separated)
-write.table(MST_data,
-            paste0(clonestimate_base, ".txt"),
-            sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
+write.table(MST_data, paste0(clonestimate_base, ".csv"),
+            sep = ",",  quote = FALSE, row.names = FALSE)
+write.table(MST_data, paste0(clonestimate_base, ".txt"),
+            sep = "\t", quote = FALSE, row.names = FALSE)
 ```
 
 
